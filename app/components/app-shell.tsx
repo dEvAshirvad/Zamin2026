@@ -219,17 +219,22 @@ export function AppShell({
       </div>
 
       {mobileOpen ? (
-        <div className="fixed inset-x-0 top-[52px] z-40 border-b  border-border bg-sidebar p-3 lg:hidden">
+        <div className="fixed inset-x-0 top-13 z-40 border-b border-border bg-sidebar p-3 lg:hidden">
           <NavLinks me={me} onNavigate={() => setMobileOpen(false)} />
           <UserBlock me={me} />
         </div>
       ) : null}
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pt-0">
-        <main className={cn('mx-auto flex w-full flex-1 flex-col gap-6')}>
-          <header className="flex flex-wrap items-start justify-between gap-3 border-b  border-border py-6 px-6">
+      <div className="flex min-w-0 flex-1 flex-col pt-13 lg:pt-0">
+        <main
+          className={cn(
+            'mx-auto flex w-full flex-1 flex-col gap-6',
+            width === 'narrow' ? 'max-w-3xl' : 'max-w-none',
+          )}
+        >
+          <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-6 py-6">
             <div className="min-w-0 space-y-1">
-              <h1 className="font-semibold text-[28px] leading-9 tracking-[0.03em]">
+              <h1 className="text-[28px] leading-9 font-semibold tracking-[0.03em]">
                 {title}
               </h1>
               {description ? (
@@ -240,7 +245,7 @@ export function AppShell({
               <div className="flex flex-wrap items-center gap-2">{actions}</div>
             ) : null}
           </header>
-          <div className={cn('p-6 space-y-6')}>{children}</div>
+          <div className="space-y-6 p-6">{children}</div>
         </main>
       </div>
     </div>

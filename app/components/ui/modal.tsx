@@ -47,7 +47,7 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
         className={cn(
           'w-full max-w-md rounded-none border border-border bg-card',
-          'duration-200 ease-[var(--ease-enter)] animate-in fade-in-0',
+          'duration-200 ease-enter animate-in fade-in-0',
           className
         )}
       >

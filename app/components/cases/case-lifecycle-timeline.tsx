@@ -45,12 +45,12 @@ export function CaseLifecycleTimeline({ className }: { className?: string }) {
       className={cn(
         // Same muted institutional accent as ring/airmail, shifted green.
         '[--lifecycle:#2e6a4a] [--lifecycle-wash:#e5f4ea]',
-        'rounded-none border border-[color-mix(in_srgb,var(--lifecycle)_28%,var(--border))] bg-[var(--lifecycle-wash)] px-5 py-8 sm:px-8',
+        'rounded-none border border-[color-mix(in_srgb,var(--lifecycle)_28%,var(--border))] bg-(--lifecycle-wash) px-5 py-8 sm:px-8',
         className,
       )}
       aria-labelledby="case-lifecycle-heading"
     >
-      <p className="text-micro uppercase tracking-[0.14em] text-[var(--lifecycle)]">
+      <p className="text-micro uppercase tracking-[0.14em] text-(--lifecycle)">
         {t('lifecycleEyebrow')}
       </p>
       <h2
@@ -73,8 +73,8 @@ export function CaseLifecycleTimeline({ className }: { className?: string }) {
               <div className="flex w-5 shrink-0 flex-col items-center">
                 <span
                   className={cn(
-                    'mt-1 size-3 shrink-0 rounded-none border-2 border-[var(--lifecycle)] bg-[var(--lifecycle-wash)]',
-                    index === 0 && 'bg-[var(--lifecycle)]',
+                    'mt-1 size-3 shrink-0 rounded-none border-2 border-(--lifecycle) bg-(--lifecycle-wash)',
+                    index === 0 && 'bg-(--lifecycle)',
                   )}
                   aria-hidden
                 />
@@ -93,8 +93,8 @@ export function CaseLifecycleTimeline({ className }: { className?: string }) {
                 )}
               >
                 <div className="min-w-0 space-y-1.5">
-                  <h3 className="font-semibold text-base tracking-wide text-foreground">
-                    <span className="me-2 font-mono text-xs text-[var(--lifecycle)]">
+                  <h3 className="text-base font-semibold tracking-wide text-foreground">
+                    <span className="me-2 font-mono text-xs text-(--lifecycle)">
                       {n}
                     </span>
                     {t(step.titleKey)}
@@ -103,7 +103,7 @@ export function CaseLifecycleTimeline({ className }: { className?: string }) {
                     {t(step.bodyKey)}
                   </p>
                 </div>
-                <p className="shrink-0 text-xs font-medium uppercase tracking-wider text-[var(--lifecycle)] sm:pt-1 sm:text-end">
+                <p className="shrink-0 text-xs font-medium tracking-wider text-(--lifecycle) uppercase sm:pt-1 sm:text-end">
                   {t(step.metaKey)}
                 </p>
               </div>

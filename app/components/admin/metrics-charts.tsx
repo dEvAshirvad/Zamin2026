@@ -93,7 +93,7 @@ function RateRadial({
       <CardContent className="pt-0">
         <ChartContainer
           config={config}
-          className="mx-auto aspect-square max-h-[180px]"
+          className="mx-auto aspect-square max-h-45"
         >
           <RadialBarChart
             data={data}
@@ -184,7 +184,7 @@ function StagePipelineChart({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={config} className="aspect-[2/1] w-full min-h-[260px]">
+        <ChartContainer config={config} className="aspect-2/1 w-full min-h-65">
           <BarChart
             accessibilityLayer
             data={data}
@@ -251,7 +251,7 @@ function TehsilLoadChart({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={config} className="aspect-[2/1] w-full min-h-[280px]">
+        <ChartContainer config={config} className="aspect-2/1 w-full min-h-70">
           <BarChart accessibilityLayer data={data} margin={{ left: 4, right: 8 }}>
             <CartesianGrid vertical={false} />
             <XAxis
@@ -358,7 +358,7 @@ function TehsilRadarChart({
       <CardContent>
         <ChartContainer
           config={config}
-          className="mx-auto aspect-square max-h-[340px] w-full"
+          className="mx-auto aspect-square max-h-85 w-full"
         >
           <RadarChart data={data}>
             <PolarGrid />

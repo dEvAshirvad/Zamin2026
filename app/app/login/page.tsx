@@ -61,7 +61,7 @@ export default function LoginPage() {
     <div className="flex min-h-full flex-1 flex-col bg-background">
       {/* Masthead — matches rid.rdmp.in/pages/login.html */}
       <header className="border-b border-border bg-muted py-6">
-        <div className="mx-auto w-full max-w-[780px] px-6">
+        <div className="mx-auto w-full max-w-195 px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 flex-1 items-center gap-4">
               <BrandMark className="size-16 shrink-0 text-ring" />
@@ -83,7 +83,7 @@ export default function LoginPage() {
       </header>
 
       <main className="flex flex-1 flex-col px-6 py-10 sm:py-14">
-        <div className="mx-auto w-full max-w-[420px] border border-border bg-muted p-8 sm:p-10">
+        <div className="mx-auto w-full max-w-105 border border-border bg-muted p-8 sm:p-10">
           <div className="mb-8 border-b border-border pb-6 text-center">
             <span className="text-micro text-muted-foreground">
               {t('secureAccess')}
@@ -135,7 +135,7 @@ export default function LoginPage() {
       </main>
 
       <footer className="border-t  border-border bg-muted py-6">
-        <div className="mx-auto w-full max-w-[780px] px-6">
+        <div className="mx-auto w-full max-w-195 px-6">
           <p className="text-center text-[0.68rem] tracking-[0.06em] text-muted-foreground">
             © {year} {t('loginFooter')}
           </p>
