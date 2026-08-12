@@ -49,7 +49,7 @@ export async function sendViaNodemailer(
   const from
     = config.email.fromFormatted
       ?? config.email.resendFromEmail
-      ?? 'projectZamin <noreply@projectzamin.local>';
+      ?? 'Simankan <noreply@projectzamin.local>';
 
   try {
     await transport.sendMail({

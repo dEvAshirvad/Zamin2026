@@ -33,8 +33,8 @@ const plexDevanagari = IBM_Plex_Sans_Devanagari({
 
 export const metadata: Metadata = {
   title: {
-    default: 'ज़मीन · Zamin',
-    template: '%s · ज़मीन',
+    default: 'सीमांकन · Simankan',
+    template: '%s · सीमांकन',
   },
   description: 'सीमांकन प्रकरण ट्रैकर — लोक सेवा गारंटी के साथ',
   icons: {

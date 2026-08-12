@@ -5,9 +5,9 @@ const options: swaggerJSDoc.Options = {
   definition: {
     openapi: '3.0.3',
     info: {
-      title: 'projectZamin API',
+      title: 'Simankan API',
       version: '1.0.0',
-      description: 'Backend API for projectZamin.',
+      description: 'Backend API for Simankan.',
     },
     servers: [
       {

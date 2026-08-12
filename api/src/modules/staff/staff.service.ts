@@ -55,7 +55,7 @@ async function maybeSendInvite(opts: {
   }
   await sendEmail({
     to: opts.email,
-    subject: 'Your projectZamin login',
+    subject: 'Your Simankan login',
     html: `<p>Hi ${opts.name},</p>
 <p>Your ${opts.role} account is ready.</p>
 <p>Email: <strong>${opts.email}</strong><br/>Temporary password: <strong>${opts.password}</strong></p>

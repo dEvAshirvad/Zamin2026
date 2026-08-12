@@ -16,7 +16,7 @@ export function BrandMark({ className }: { className?: string }) {
 }
 
 /**
- * Locale-swapped wordmark — Hindi users see ज़मीन, English users see Zamin.
+ * Locale-swapped wordmark — Hindi users see सीमांकन, English users see Simankan.
  * It is not a transliteration shown to both.
  */
 export function BrandLockup({

@@ -11,7 +11,7 @@ export const LOCALE_STORAGE_KEY = 'pz-locale';
  */
 const en = {
   // Brand
-  'brand': 'Zamin',
+  'brand': 'Simankan',
   'brandTagline': 'Demarcation, on time',
   'brandStamp': 'Lok Seva Guarantee — Demarcation Tracker',
 
@@ -263,7 +263,7 @@ type MessageKey = keyof typeof en;
 
 const hi: Record<MessageKey, string> = {
   // Brand
-  'brand': 'ज़मीन',
+  'brand': 'सीमांकन',
   'brandTagline': 'सीमांकन, समय पर',
   'brandStamp': 'लोक सेवा गारंटी — सीमांकन ट्रैकर',
 

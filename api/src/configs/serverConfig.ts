@@ -168,7 +168,7 @@ export default function createApp(): Express {
     Respond(
       res,
       {
-        message: 'projectZamin API services are running.',
+        message: 'Simankan API services are running.',
         nodeEnv: env.NODE_ENV,
         uptime: process.uptime(),
       },
@@ -243,7 +243,7 @@ export default function createApp(): Express {
     apiReference({
       url: '/docs/openapi.json',
       theme: 'purple',
-      pageTitle: 'projectZamin API Reference',
+      pageTitle: 'Simankan API Reference',
     }),
   );
 

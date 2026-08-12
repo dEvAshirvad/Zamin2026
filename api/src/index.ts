@@ -37,7 +37,7 @@ async function start() {
     logger.info('Temporary upload sweeper started');
 
     server = app.listen(env.PORT, () => {
-      logger.info(`projectZamin API started on http://localhost:${env.PORT}`);
+      logger.info(`Simankan API started on http://localhost:${env.PORT}`);
     });
   }
   catch (error) {

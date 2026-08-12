@@ -30,7 +30,7 @@ export async function sendViaResend(options: SendEmailOptions): Promise<void> {
   const from
     = config.email.resendFromEmail
       ?? config.email.fromFormatted
-      ?? 'projectZamin <noreply@projectzamin.local>';
+      ?? 'Simankan <noreply@projectzamin.local>';
 
   const { error } = await resend.emails.send({
     from,

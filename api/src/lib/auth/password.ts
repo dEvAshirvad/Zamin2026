@@ -34,7 +34,7 @@ const emailAndPassword: BetterAuthOptions['emailAndPassword'] = {
   sendResetPassword: async ({ user, url }) => {
     await sendEmail({
       to: user.email,
-      subject: 'Reset your projectZamin password',
+      subject: 'Reset your Simankan password',
       html: `<p>Hi ${user.name || 'there'},</p>
 <p>Reset your password:</p>
 <p><a href="${url}">Reset password</a></p>

@@ -1,4 +1,6 @@
-# projectZamin (ज़मीन)
+# Simankan (सीमांकन)
+
+> Internal monorepo / Docker names may still say `projectzamin` / `zamin_*` — that is intentional (no DB rename).
 
 **Track सर सीमांकन (official land boundary demarcation) applications per tehsil — with role handoffs and a 30-day Lok Seva Guarantee clock.**
 
@@ -25,6 +27,7 @@ The paper process already has a clear sequence. What was missing was a shared, t
 | **Domain** | Collectorate / tehsil ops |
 | **Stage** | Phase 5 — ops polish |
 | **Locales** | Hindi (default) + English |
+| **Brand** | Simankan / सीमांकन — prod hosts `simankan.rdmp.in` + `api.simankan.rdmp.in` |
 | **Auth** | Email/password via better-auth (cookie prefix `zamin`); public signup disabled |
 | **Stack** | pnpm monorepo — Next.js app (`:3000`) + Express API (`:3001`) + Mongo / Redis / MinIO |
 
@@ -194,20 +197,18 @@ pnpm db:up:prod                   # or: docker compose -f docker-compose.prod.ym
 
 Always use **`-f docker-compose.prod.yml`** (bare `docker compose down` will not stop `zamin_*`).
 
-Rebuild API after Dockerfile changes:
+Production hosts: **`simankan.rdmp.in`** (UI) · **`api.simankan.rdmp.in`** (API). After changing `NEXT_PUBLIC_API_URL`, rebuild the **app** image (`--no-cache app`).
 
 ```bash
-cd /home/ubuntu/Zamin2026   # or your checkout
+cd /home/ubuntu/Zamin2026
 git pull
-docker compose -f docker-compose.prod.yml down
-docker ps -aq --filter name=zamin_ | xargs -r docker rm -f
-docker compose -f docker-compose.prod.yml build --no-cache api
+# .env: NEXT_PUBLIC_API_URL / BETTER_AUTH_URL / CORS_ORIGINS / COOKIE_DOMAIN → simankan.*
+docker compose -f docker-compose.prod.yml build --no-cache app
 docker compose -f docker-compose.prod.yml up -d
-docker ps --filter name=zamin_
 curl -sS http://127.0.0.1:7855/health
 ```
 
-On a host that already uses nginx (e.g. `*.rdmp.in`): copy configs from `deploy/nginx/`, then Certbot. Print the full command checklist with `bash deploy/vps-checklist.sh`.
+Nginx: `deploy/nginx/simankan.rdmp.in.conf` + `api.simankan.rdmp.in.conf`, then Certbot. Full cutover checklist: `bash deploy/vps-checklist.sh`.
 
 Coolify alternative: Compose resource → `docker-compose.prod.yml`, env from `.env.production.example`, domains → container ports `3000` / `3001`.
 

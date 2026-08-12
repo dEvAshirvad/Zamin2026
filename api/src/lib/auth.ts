@@ -11,7 +11,7 @@ import emailAndPassword from '@/lib/auth/password';
 import { session, user } from '@/lib/auth/schemas';
 
 export const auth = betterAuth({
-  appName: 'projectZamin',
+  appName: 'Simankan',
   baseURL: config.auth.baseURL,
   ...(config.auth.secret ? { secret: config.auth.secret } : {}),
   ...(config.auth.secrets ? { secrets: config.auth.secrets } : {}),
