@@ -23,11 +23,13 @@ RUN pnpm --filter projectzamin-backend build
 
 FROM base AS prod-deps
 ENV HUSKY=0
+# bcrypt native build on alpine
+RUN apk add --no-cache python3 make g++
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
 COPY api/package.json ./api/
-# Strip root prepare (husky) so pnpm deploy does not fail in prod-only images
-RUN pnpm install --frozen-lockfile --filter projectzamin-backend... --prod --ignore-scripts \
-  && pnpm pkg delete scripts.prepare \
+# Strip root prepare (husky); allow package install scripts (bcrypt)
+RUN pnpm pkg delete scripts.prepare \
+  && pnpm install --frozen-lockfile --filter projectzamin-backend... --prod \
   && npm_config_ignore_scripts=true pnpm --filter projectzamin-backend deploy --prod --legacy /out
 
 FROM node:22-alpine AS runner
@@ -39,10 +41,12 @@ RUN apk add --no-cache curl \
   && addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 api
 
-# pnpm deploy → flat node_modules (avoids broken workspace symlinks in the image)
+# pnpm deploy → portable node_modules
 COPY --from=prod-deps /out/node_modules ./node_modules
 COPY --from=prod-deps /out/package.json ./
 COPY --from=builder /app/api/dist ./dist
+# serverConfig reads public/logo.svg at import time
+COPY --from=builder /app/api/public ./public
 
 RUN mkdir -p /app/logs /app/uploads/temp /app/uploads/persist \
   && chown -R api:nodejs /app
