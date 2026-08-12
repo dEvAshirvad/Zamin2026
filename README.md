@@ -192,6 +192,21 @@ cp .env.production.example .env   # fill secrets + public URLs
 pnpm db:up:prod                   # or: docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+Always use **`-f docker-compose.prod.yml`** (bare `docker compose down` will not stop `zamin_*`).
+
+Rebuild API after Dockerfile changes:
+
+```bash
+cd /home/ubuntu/Zamin2026   # or your checkout
+git pull
+docker compose -f docker-compose.prod.yml down
+docker ps -aq --filter name=zamin_ | xargs -r docker rm -f
+docker compose -f docker-compose.prod.yml build --no-cache api
+docker compose -f docker-compose.prod.yml up -d
+docker ps --filter name=zamin_
+curl -sS http://127.0.0.1:7855/health
+```
+
 On a host that already uses nginx (e.g. `*.rdmp.in`): copy configs from `deploy/nginx/`, then Certbot. Print the full command checklist with `bash deploy/vps-checklist.sh`.
 
 Coolify alternative: Compose resource → `docker-compose.prod.yml`, env from `.env.production.example`, domains → container ports `3000` / `3001`.

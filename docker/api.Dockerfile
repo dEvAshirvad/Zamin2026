@@ -25,8 +25,10 @@ FROM base AS prod-deps
 ENV HUSKY=0
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
 COPY api/package.json ./api/
+# Strip root prepare (husky) so pnpm deploy does not fail in prod-only images
 RUN pnpm install --frozen-lockfile --filter projectzamin-backend... --prod --ignore-scripts \
-  && pnpm --filter projectzamin-backend deploy --prod --legacy /out
+  && pnpm pkg delete scripts.prepare \
+  && npm_config_ignore_scripts=true pnpm --filter projectzamin-backend deploy --prod --legacy /out
 
 FROM node:22-alpine AS runner
 WORKDIR /app

@@ -34,10 +34,14 @@ cat <<EOF
   # nano .env  — must have production HTTPS URLs + secrets
   grep -E '^(NODE_ENV|NEXT_PUBLIC_API_URL|BETTER_AUTH_URL|CORS_ORIGINS|COOKIE_DOMAIN|TRUST_PROXY)' .env
 
-[4] Start stack
+[4] Start stack (always -f docker-compose.prod.yml — bare compose down misses zamin_*)
   cd ${ROOT}
+  docker compose -f docker-compose.prod.yml down
+  docker ps -aq --filter name=zamin_ | xargs -r docker rm -f
+  docker compose -f docker-compose.prod.yml build --no-cache api
   docker compose -f docker-compose.prod.yml up -d --build
   docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'zamin|NAMES'
+  docker logs zamin_api --tail 40
   curl -sS http://127.0.0.1:7855/health
   curl -sS -o /dev/null -w 'app:%{http_code}\n' http://127.0.0.1:7854
 
