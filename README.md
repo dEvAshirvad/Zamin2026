@@ -192,7 +192,9 @@ cp .env.production.example .env   # fill secrets + public URLs
 pnpm db:up:prod                   # or: docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Coolify: add a **Docker Compose** resource pointing at `docker-compose.prod.yml`, paste env from `.env.production.example`, domains on `zamin.<zone>` → `:7854` and `api.zamin.<zone>` → `:7855`, enable SSL.
+On a host that already uses nginx (e.g. `*.rdmp.in`): copy configs from `deploy/nginx/`, then Certbot. Print the full command checklist with `bash deploy/vps-checklist.sh`.
+
+Coolify alternative: Compose resource → `docker-compose.prod.yml`, env from `.env.production.example`, domains → container ports `3000` / `3001`.
 
 Laptop DB access (Atlas-style — never open Mongo to the internet):
 
