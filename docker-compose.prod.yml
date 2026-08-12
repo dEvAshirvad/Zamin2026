@@ -1,0 +1,162 @@
+# projectZamin — VPS / Coolify production stack
+#
+# - App/API published only on loopback: 7854 (UI), 7855 (API)
+# - Mongo / Redis / MinIO: Docker network only for app traffic;
+#   optional 127.0.0.1 tunnel ports (non-conflicting) for Compass / Redis Insight
+# - Coolify (or Caddy/Nginx) terminates SSL and proxies to 127.0.0.1:7854 / :7855
+#
+# Usage:
+#   cp .env.production.example .env   # edit secrets + public URLs
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Laptop tools (Atlas-style): SSH tunnel, then connect to localhost:
+#   ssh -N \
+#     -L 27027:127.0.0.1:27027 \
+#     -L 6389:127.0.0.1:6389 \
+#     -L 9100:127.0.0.1:9100 \
+#     -L 9101:127.0.0.1:9101 \
+#     deploy@YOUR_VPS_IP
+
+name: zamin
+
+networks:
+  zamin:
+    name: zamin_internal
+    driver: bridge
+
+services:
+  mongodb_container:
+    image: mongo:7
+    restart: unless-stopped
+    container_name: zamin_mongodb
+    env_file:
+      - ./.env
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-projectzamin}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-projectzamin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    # Tunnel only — never bind 0.0.0.0 (avoids clash with other Mongo on :27017)
+    ports:
+      - "127.0.0.1:27027:27017"
+    volumes:
+      - ./mongodb_data_container:/data/db
+    networks:
+      - zamin
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'mongosh -u "$$MONGO_INITDB_ROOT_USERNAME" -p "$$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --quiet --eval "db.adminCommand({ ping: 1 })"',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  redis_container:
+    image: redis:7
+    restart: unless-stopped
+    container_name: zamin_redis
+    env_file:
+      - ./.env
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --stop-writes-on-bgsave-error no
+    ports:
+      - "127.0.0.1:6389:6379"
+    volumes:
+      - ./redis_data:/data
+    networks:
+      - zamin
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  minio_container:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    container_name: zamin_minio
+    env_file:
+      - ./.env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_ACCESS_KEY}
+    command: server /data --console-address ":9001"
+    ports:
+      - "127.0.0.1:9100:9000"
+      - "127.0.0.1:9101:9001"
+    volumes:
+      - ./minio_data:/data
+    networks:
+      zamin:
+        aliases:
+          - minio
+
+  # Optional Mongo backup UI — localhost only
+  databasus:
+    image: databasus/databasus:latest
+    container_name: zamin_databasus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4105:4005"
+    volumes:
+      - ./databasus-data:/databasus-data
+    depends_on:
+      - mongodb_container
+    networks:
+      - zamin
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: projectzamin-api:prod
+    container_name: zamin_api
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # In-compose DNS (override any localhost values in .env)
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb_container:27017/${MONGO_INITDB_DATABASE:-projectzamin}?authSource=admin
+      REDIS_HOST: redis_container
+      REDIS_PORT: "6379"
+      MINIO_ENDPOINT: http://minio:9000
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+    ports:
+      - "127.0.0.1:7855:3001"
+    depends_on:
+      mongodb_container:
+        condition: service_healthy
+      redis_container:
+        condition: service_healthy
+      minio_container:
+        condition: service_started
+    networks:
+      - zamin
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    image: projectzamin-app:prod
+    container_name: zamin_app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:7854:3000"
+    depends_on:
+      - api
+    networks:
+      - zamin

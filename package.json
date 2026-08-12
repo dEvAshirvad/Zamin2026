@@ -19,7 +19,9 @@
     "check:api": "pnpm --filter projectzamin-backend check",
     "db:up": "docker compose up -d",
     "db:up:vps": "docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d",
+    "db:up:prod": "docker compose -f docker-compose.prod.yml up -d --build",
     "db:down": "docker compose down",
+    "db:down:prod": "docker compose -f docker-compose.prod.yml down",
     "prepare": "husky"
   },
   "devDependencies": {

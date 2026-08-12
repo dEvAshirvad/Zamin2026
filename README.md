@@ -21,7 +21,6 @@ The paper process already has a clear sequence. What was missing was a shared, t
 
 ## Product snapshot
 
-| | |
 |---|---|
 | **Domain** | Collectorate / tehsil ops |
 | **Stage** | Phase 5 — ops polish |
@@ -154,6 +153,7 @@ pnpm db:up:vps
 | `pnpm check:api` | API typecheck + lint + tests |
 | `pnpm db:up` / `db:down` | Start / stop compose data stack |
 | `pnpm db:up:vps` | Compose with VPS overlay |
+| `pnpm db:up:prod` / `db:down:prod` | Full prod stack (`docker-compose.prod.yml`) |
 
 ---
 
@@ -174,9 +174,40 @@ See `.env.example` and `api/.env.example` for the full list (timeouts, rate limi
 
 ---
 
-## Deploy (Docker / Coolify)
+## Deploy (VPS / Coolify — recommended)
 
-Build from the **repository root**:
+Use **`docker-compose.prod.yml`**: one private Docker network (`zamin_internal`). App/API listen on loopback only; data stores are not on the public interface.
+
+| Service | Host bind | Notes |
+|---------|-----------|--------|
+| Frontend | `127.0.0.1:7854` | Coolify/proxy → HTTPS |
+| API | `127.0.0.1:7855` | Coolify/proxy → HTTPS |
+| Mongo | `127.0.0.1:27027` | SSH tunnel for Compass |
+| Redis | `127.0.0.1:6389` | SSH tunnel for Redis Insight |
+| MinIO | `127.0.0.1:9100` / `9101` | SSH tunnel for API / console |
+| Databasus | `127.0.0.1:4105` | Optional backup UI |
+
+```bash
+cp .env.production.example .env   # fill secrets + public URLs
+pnpm db:up:prod                   # or: docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Coolify: add a **Docker Compose** resource pointing at `docker-compose.prod.yml`, paste env from `.env.production.example`, domains on `zamin.<zone>` → `:7854` and `api.zamin.<zone>` → `:7855`, enable SSL.
+
+Laptop DB access (Atlas-style — never open Mongo to the internet):
+
+```bash
+ssh -N \
+  -L 27027:127.0.0.1:27027 \
+  -L 6389:127.0.0.1:6389 \
+  -L 9100:127.0.0.1:9100 \
+  -L 9101:127.0.0.1:9101 \
+  deploy@YOUR_VPS_IP
+```
+
+Then Compass → `mongodb://USER:PASS@127.0.0.1:27027/projectzamin?authSource=admin`.
+
+### Manual image builds (optional)
 
 ```bash
 docker build -f docker/api.Dockerfile -t projectzamin-api .
@@ -184,8 +215,6 @@ docker build -f docker/api.Dockerfile -t projectzamin-api .
 docker build -f docker/app.Dockerfile -t projectzamin-app \
   --build-arg NEXT_PUBLIC_API_URL=https://api.example.com .
 ```
-
-Point Coolify (or similar) at `docker/api.Dockerfile` / `docker/app.Dockerfile` with root context. Run Mongo / Redis / MinIO via `docker-compose.yml` (add `docker-compose.vps.yml` when binding data ports to localhost only).
 
 ---
 
