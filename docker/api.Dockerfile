@@ -25,7 +25,8 @@ FROM base AS prod-deps
 ENV HUSKY=0
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
 COPY api/package.json ./api/
-RUN pnpm install --frozen-lockfile --filter projectzamin-backend... --prod --ignore-scripts
+RUN pnpm install --frozen-lockfile --filter projectzamin-backend... --prod --ignore-scripts \
+  && pnpm --filter projectzamin-backend deploy --prod --legacy /out
 
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -36,10 +37,10 @@ RUN apk add --no-cache curl \
   && addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 api
 
+# pnpm deploy → flat node_modules (avoids broken workspace symlinks in the image)
+COPY --from=prod-deps /out/node_modules ./node_modules
+COPY --from=prod-deps /out/package.json ./
 COPY --from=builder /app/api/dist ./dist
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=prod-deps /app/api/node_modules ./node_modules
-COPY api/package.json ./
 
 RUN mkdir -p /app/logs /app/uploads/temp /app/uploads/persist \
   && chown -R api:nodejs /app
