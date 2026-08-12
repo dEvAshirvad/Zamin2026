@@ -1,0 +1,24 @@
+# VPS override: bind data ports to localhost only.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d
+#
+# API on the same host still connects via localhost.
+# Optional: SSH tunnel for Compass / MinIO / Databasus UI from your laptop
+# ssh -N -L 27017:127.0.0.1:27017 -L 9001:127.0.0.1:9001 -L 4005:127.0.0.1:4005 deploy@VPS_IP
+
+services:
+  mongodb_container:
+    ports:
+      - "127.0.0.1:27017:27017"
+
+  redis_container:
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+
+  minio_container:
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+  databasus:
+    ports:
+      - "127.0.0.1:4005:4005"

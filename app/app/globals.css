@@ -1,0 +1,246 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   ज़मीन / Zamin — Archivist / airmail tokens (ported from Raipur portal).
+   SLA hues stay reserved for deadline status only; values are airmail blues
+   + carbon pink (no green/amber/red decoration elsewhere).
+   Primary CTA is ink (#1a1e22) so it never reads as an SLA colour.
+--------------------------------------------------------------------------- */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-wash: var(--primary-wash);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* SLA scale — reserved. Never use these for decoration. */
+  --color-sla-ontrack: var(--sla-ontrack);
+  --color-sla-ontrack-bg: var(--sla-ontrack-bg);
+  --color-sla-duesoon: var(--sla-duesoon);
+  --color-sla-duesoon-bg: var(--sla-duesoon-bg);
+  --color-sla-overdue: var(--sla-overdue);
+  --color-sla-overdue-bg: var(--sla-overdue-bg);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --shadow-overlay: 0 4px 16px -4px rgb(26 30 34 / 0.2);
+
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  /* Latin → Geist; Devanagari has no glyphs there and falls through to
+     Plex Sans Devanagari. Hindi is the DEFAULT locale — this ordering is
+     load-bearing, not cosmetic. */
+  --font-sans:
+    var(--font-geist-sans), var(--font-plex-deva), system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  /* Airmail paper */
+  --background: #f2f6f9;
+  --foreground: #1a1e22;
+  --card: #ffffff;
+  --card-foreground: #1a1e22;
+  --popover: #ffffff;
+  --popover-foreground: #1a1e22;
+
+  /* Ink CTA; accent blue for wash / ring / charts */
+  --primary: #1a1e22;
+  --primary-foreground: #f2f6f9;
+  --primary-hover: #2e6a8a;
+  --primary-wash: #e5eef4;
+
+  --secondary: #e5eef4;
+  --secondary-foreground: #1a1e22;
+  --muted: #e5eef4;
+  --muted-foreground: #5c7585;
+  --accent: #e5eef4;
+  --accent-foreground: #1a1e22;
+
+  --destructive: #b87a72;
+  --destructive-foreground: #f2f6f9;
+
+  --border: #b8ccda;
+  --input: #b8ccda;
+  --ring: #2e6a8a;
+
+  /* SLA → airmail blues + carbon pink */
+  --sla-ontrack: #2e6a8a;
+  --sla-ontrack-bg: #e5eef4;
+  --sla-duesoon: #7fa8b8;
+  --sla-duesoon-bg: #eef4f7;
+  --sla-overdue: #b87a72;
+  --sla-overdue-bg: #f8f0ef;
+
+  --chart-1: #1a1e22;
+  --chart-2: #2e6a8a;
+  --chart-3: #7fa8b8;
+  --chart-4: #b8ccda;
+  --chart-5: #e5eef4;
+
+  --radius: 0;
+
+  --sidebar: #e5eef4;
+  --sidebar-foreground: #1a1e22;
+  --sidebar-primary: #1a1e22;
+  --sidebar-primary-foreground: #f2f6f9;
+  --sidebar-accent: #1a1e22;
+  --sidebar-accent-foreground: #f2f6f9;
+  --sidebar-border: #b8ccda;
+  --sidebar-ring: #2e6a8a;
+}
+
+.dark {
+  /* Cool ink surfaces — redesigned, not inverted. */
+  --background: #12161a;
+  --foreground: #e5eef4;
+  --card: #1a2228;
+  --card-foreground: #e5eef4;
+  --popover: #1e272e;
+  --popover-foreground: #e5eef4;
+
+  --primary: #e5eef4;
+  --primary-foreground: #12161a;
+  --primary-hover: #7fa8b8;
+  --primary-wash: #243039;
+
+  --secondary: #1e272e;
+  --secondary-foreground: #e5eef4;
+  --muted: #1e272e;
+  --muted-foreground: #7fa8b8;
+  --accent: #243039;
+  --accent-foreground: #e5eef4;
+
+  --destructive: #d4a09a;
+  --destructive-foreground: #12161a;
+
+  --border: #3a4a56;
+  --input: #3a4a56;
+  --ring: #7fa8b8;
+
+  --sla-ontrack: #7fa8b8;
+  --sla-ontrack-bg: #1e2a32;
+  --sla-duesoon: #a0c0cc;
+  --sla-duesoon-bg: #243039;
+  --sla-overdue: #d4a09a;
+  --sla-overdue-bg: #2e2220;
+
+  --chart-1: #e5eef4;
+  --chart-2: #7fa8b8;
+  --chart-3: #2e6a8a;
+  --chart-4: #5c7585;
+  --chart-5: #3a4a56;
+
+  --sidebar: #1a2228;
+  --sidebar-foreground: #e5eef4;
+  --sidebar-primary: #e5eef4;
+  --sidebar-primary-foreground: #12161a;
+  --sidebar-accent: #e5eef4;
+  --sidebar-accent-foreground: #12161a;
+  --sidebar-border: #3a4a56;
+  --sidebar-ring: #7fa8b8;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* Devanagari matras sit above and below the baseline. Never tighten this
+       below 1.5 on text that can contain Hindi. */
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* Every number that lives in a column lines up. */
+  table,
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: var(--primary-wash);
+    color: var(--foreground);
+  }
+}
+
+@layer components {
+  /* Eyebrow / micro label — stamp / field kickers. */
+  .text-micro {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

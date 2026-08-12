@@ -1,0 +1,227 @@
+'use client';
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FormEvent, useState, type ReactNode } from 'react';
+import { ArrowRightIcon } from '@phosphor-icons/react';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ErrorNote } from '@/components/ui/feedback';
+import { Field, Input, Select } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
+import { useLocale } from '@/hooks/use-locale';
+import { apiGet, apiPost } from '@/lib/api';
+import type { ApiSuccess, CaseDetail, TehsilRi } from '@/lib/cases';
+import { stageLabel, type MessageKey } from '@/lib/i18n';
+import { queryKeys } from '@/lib/query-keys';
+
+const ACTION_KEY: Record<string, MessageKey> = {
+  MEMO_ISSUED: 'action.memo',
+  HEARING_SCHEDULED: 'action.notice',
+  OBJECTIONS_WINDOW: 'action.objections',
+  DEMARCATION_DONE: 'action.demarcation',
+  ORDER_ISSUED: 'action.order',
+  ECOURT_UPLOADED: 'action.ecourt',
+};
+
+/** Each allowed transition gets its own bounded block. */
+function ActionBlock({
+  label,
+  onSubmit,
+  pending,
+  children,
+}: {
+  label: string;
+  onSubmit: (e: FormEvent) => void;
+  pending: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="flex flex-col gap-3 rounded-none border border-border bg-muted/30 p-3"
+    >
+      {children}
+      <Button type="submit" isDisabled={pending} className="w-fit">
+        {label}
+        <ArrowRightIcon size={14} className="rtl:rotate-180" />
+      </Button>
+    </form>
+  );
+}
+
+export function CaseTransitions({
+  detail,
+  mode,
+}: {
+  detail: CaseDetail;
+  mode: 'tehsildar' | 'ri' | 'admin';
+}) {
+  const queryClient = useQueryClient();
+  const { locale, t } = useLocale();
+  const [assignedRiId, setAssignedRiId] = useState('');
+  const [hearingAt, setHearingAt] = useState('');
+  const [ecourtReference, setEcourtReference] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const next = detail.allowedNext ?? [];
+
+  const risQuery = useQuery({
+    queryKey: ['tehsil-ris'] as const,
+    queryFn: async () => {
+      const res = await apiGet<ApiSuccess<TehsilRi[]>>('/api/v1/tehsils/me/ris');
+      return res.data;
+    },
+    enabled: mode === 'tehsildar' && next.includes('MEMO_ISSUED'),
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (toStage: string) => {
+      const body: Record<string, string> = { toStage };
+      if (toStage === 'MEMO_ISSUED' && assignedRiId) {
+        body.assignedRiId = assignedRiId;
+      }
+      if (toStage === 'HEARING_SCHEDULED') {
+        if (!hearingAt) {
+          throw Object.assign(new Error('hearingAt required'), {
+            friendlyMessage: t('hearingRequired'),
+          });
+        }
+        body.hearingAt = new Date(hearingAt).toISOString();
+      }
+      if (toStage === 'ECOURT_UPLOADED' && ecourtReference.trim()) {
+        body.ecourtReference = ecourtReference.trim();
+      }
+      if (note.trim()) {
+        body.note = note.trim();
+      }
+      const data = await apiPost<ApiSuccess<CaseDetail>>(
+        `/api/v1/cases/${detail.id}/transitions`,
+        body,
+      );
+      return data.data;
+    },
+    onSuccess: async () => {
+      setError(null);
+      setNote('');
+      setEcourtReference('');
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.case(detail.id),
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cases });
+      await queryClient.invalidateQueries({
+        queryKey: ['cases', detail.id, 'transitions'],
+      });
+    },
+    onError: (err: { friendlyMessage?: string; message?: string }) => {
+      setError(err.friendlyMessage ?? err.message ?? t('transitionFailed'));
+    },
+  });
+
+  if (next.length === 0) return null;
+
+  function labelFor(stage: string): string {
+    const key = ACTION_KEY[stage];
+    return key ? t(key) : stageLabel(locale, stage);
+  }
+
+  function submit(event: FormEvent, toStage: string) {
+    event.preventDefault();
+    mutation.mutate(toStage);
+  }
+
+  const plainStages = next.filter((s) => !(s in FIELDED_STAGES));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('advanceCase')}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <ErrorNote>{error}</ErrorNote>
+
+        {next.includes('MEMO_ISSUED') ? (
+          <ActionBlock
+            label={labelFor('MEMO_ISSUED')}
+            pending={mutation.isPending}
+            onSubmit={(e) => submit(e, 'MEMO_ISSUED')}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('riOptional')} hint={t('riOptionalHint')}>
+                <Select
+                  value={assignedRiId}
+                  onChange={(e) => setAssignedRiId(e.target.value)}
+                >
+                  <option value="">{t('autoAssign')}</option>
+                  {(risQuery.data ?? []).map((ri) => (
+                    <option key={ri.id} value={ri.id}>
+                      {ri.name} ({ri.email})
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label={`${t('noteOptional')} (${t('optional')})`}>
+                <Input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </Field>
+            </div>
+          </ActionBlock>
+        ) : null}
+
+        {next.includes('HEARING_SCHEDULED') ? (
+          <ActionBlock
+            label={labelFor('HEARING_SCHEDULED')}
+            pending={mutation.isPending}
+            onSubmit={(e) => submit(e, 'HEARING_SCHEDULED')}
+          >
+            <Field label={t('hearingDateTime')} className="sm:max-w-xs">
+              <Input
+                type="datetime-local"
+                required
+                value={hearingAt}
+                onChange={(e) => setHearingAt(e.target.value)}
+              />
+            </Field>
+          </ActionBlock>
+        ) : null}
+
+        {next.includes('ECOURT_UPLOADED') ? (
+          <ActionBlock
+            label={labelFor('ECOURT_UPLOADED')}
+            pending={mutation.isPending}
+            onSubmit={(e) => submit(e, 'ECOURT_UPLOADED')}
+          >
+            <Field
+              label={`${t('ecourtReference')} (${t('optional')})`}
+              className="sm:max-w-xs"
+            >
+              <Input
+                value={ecourtReference}
+                onChange={(e) => setEcourtReference(e.target.value)}
+                placeholder={t('ecourtReferencePlaceholder')}
+              />
+            </Field>
+          </ActionBlock>
+        ) : null}
+
+        {plainStages.map((stage) => (
+          <ActionBlock
+            key={stage}
+            label={labelFor(stage)}
+            pending={mutation.isPending}
+            onSubmit={(e) => submit(e, stage)}
+          />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Stages that render their own input fields above. */
+const FIELDED_STAGES = {
+  MEMO_ISSUED: true,
+  HEARING_SCHEDULED: true,
+  ECOURT_UPLOADED: true,
+} as const;

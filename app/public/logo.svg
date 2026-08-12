@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="Zamin">
+  <!-- The plot -->
+  <rect x="3.25" y="3.25" width="17.5" height="17.5" rx="1.5"
+        stroke="currentColor" stroke-width="1.5" />
+  <!-- The demarcated line: सीमांकन -->
+  <path d="M3.25 14.5H14.5V20.75" stroke="currentColor" stroke-width="1.5"
+        stroke-linecap="square" />
+  <!-- The boundary pillar set at the junction -->
+  <circle cx="14.5" cy="14.5" r="2.5" fill="currentColor" />
+</svg>

@@ -1,0 +1,57 @@
+# Dependencies
+.cursor
+.cursorignore
+.claude
+node_modules
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnpm-store
+
+# Build
+dist
+build
+.next
+out
+coverage
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.test
+!app/.env.example
+api/.env
+api/.env.test
+app/.env
+app/.env.local
+
+# Data volumes (compose)
+mongodb_data_container
+redis_data
+minio_data
+databasus-data
+backup
+backups
+logs
+api/logs
+api/uploads
+
+# Tooling / IDE
+.DS_Store
+.cursor
+.vercel
+*.pem
+graphify-out
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
