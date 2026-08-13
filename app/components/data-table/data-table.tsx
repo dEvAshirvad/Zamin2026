@@ -25,6 +25,7 @@ import { PAGE_SIZE } from '@/lib/page-size';
 import { cn } from '@/lib/utils';
 
 import { dataTableFeatures, type DataTableFeatures } from './features';
+import { Label } from 'react-aria-components';
 
 type DataTableProps<TData extends RowData> = {
   columns: ColumnDef<DataTableFeatures, TData, unknown>[];
@@ -79,20 +80,27 @@ export function DataTable<TData extends RowData>({
 
   const page = pagination.pageIndex + 1;
   const totalPages = Math.max(1, pageCount);
-  const from = rowCount === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1;
-  const to = Math.min(rowCount, (pagination.pageIndex + 1) * pagination.pageSize);
+  const from =
+    rowCount === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1;
+  const to = Math.min(
+    rowCount,
+    (pagination.pageIndex + 1) * pagination.pageSize
+  );
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <Input
-          type="search"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={searchPlaceholder ?? t('searchPlaceholder')}
-          aria-label={t('search')}
-          className="max-w-sm"
-        />
+        <div className="">
+          <Label>{t('search')}</Label>
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder={searchPlaceholder ?? t('searchPlaceholder')}
+            aria-label={t('search')}
+            className="max-w-sm h-8"
+          />
+        </div>
         {toolbar}
       </div>
 
@@ -134,11 +142,11 @@ export function DataTable<TData extends RowData>({
                   table.getRowModel().rows.map((row) => (
                     <TR
                       key={row.id}
-                      className={onRowClick ? 'group cursor-pointer' : undefined}
+                      className={
+                        onRowClick ? 'group cursor-pointer' : undefined
+                      }
                       onClick={
-                        onRowClick
-                          ? () => onRowClick(row.original)
-                          : undefined
+                        onRowClick ? () => onRowClick(row.original) : undefined
                       }
                     >
                       {row.getVisibleCells().map((cell) => (

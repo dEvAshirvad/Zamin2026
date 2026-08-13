@@ -33,6 +33,8 @@ export interface CaseDetail extends CaseListItem {
   challanObjectKey: string | null;
   mapDownloadUrl: string | null;
   challanDownloadUrl: string | null;
+  /** Display name for assigned RI (detail / transition responses). */
+  assignedRiName?: string | null;
   allowedNext?: string[];
   updatedAt: string;
 }

@@ -8,13 +8,17 @@ import { CaretRightIcon } from '@phosphor-icons/react';
 import { createColumnHelper } from '@tanstack/react-table';
 
 import { AppShell } from '@/components/app-shell';
+import {
+  CaseListFilters,
+  useTehsilMap,
+  type CaseListFilterValues,
+} from '@/components/cases/case-list-filters';
 import { SlaBadge } from '@/components/cases/sla-badge';
 import { CaseLifecycleTimeline } from '@/components/cases/case-lifecycle-timeline';
 import { DataTable } from '@/components/data-table/data-table';
 import type { DataTableFeatures } from '@/components/data-table/features';
 import { RoleGate } from '@/components/role-gate';
 import { StageChip } from '@/components/ui/badge';
-import { ToggleChip } from '@/components/ui/toggle-chip';
 import { listQuery, useServerTableState } from '@/hooks/use-server-table-state';
 import { useMe } from '@/hooks/use-me';
 import { useLocale } from '@/hooks/use-locale';
@@ -29,7 +33,11 @@ function AdminCases() {
   const { data: me } = useMe();
   const { locale, t } = useLocale();
   const router = useRouter();
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [filters, setFilters] = useState<CaseListFilterValues>({
+    stage: '',
+    overdueOnly: false,
+    tehsilId: '',
+  });
   const {
     search,
     setSearch,
@@ -40,11 +48,20 @@ function AdminCases() {
     limit,
   } = useServerTableState();
 
+  const tehsilsQuery = useTehsilMap(true);
+
   const casesQuery = useQuery({
     queryKey: [
       ...queryKeys.cases,
       'admin',
-      { overdueOnly, q: debouncedSearch, page, limit },
+      {
+        overdueOnly: filters.overdueOnly,
+        stage: filters.stage,
+        tehsilId: filters.tehsilId,
+        q: debouncedSearch,
+        page,
+        limit,
+      },
     ] as const,
     queryFn: async () => {
       const res = await apiGet<PaginatedCases>(
@@ -52,8 +69,10 @@ function AdminCases() {
           page,
           limit,
           q: debouncedSearch,
-          overdue: overdueOnly || undefined,
-        })}`
+          overdue: filters.overdueOnly || undefined,
+          stage: filters.stage || undefined,
+          tehsilId: filters.tehsilId || undefined,
+        })}`,
       );
       return {
         rows: res.data ?? [],
@@ -88,6 +107,14 @@ function AdminCases() {
                 {t('village')} {row.original.village} ·{' '}
                 {row.original.khasras.length} {t('khasras')}
               </span>
+            </span>
+          ),
+        }),
+        columnHelper.accessor('tehsilId', {
+          header: t('tehsil'),
+          cell: ({ getValue }) => (
+            <span className="text-sm text-muted-foreground">
+              {tehsilsQuery.data?.get(getValue()) ?? getValue()}
             </span>
           ),
         }),
@@ -127,7 +154,7 @@ function AdminCases() {
           ),
         }),
       ]),
-    [locale, t]
+    [locale, t, tehsilsQuery.data],
   );
 
   if (!me) return null;
@@ -140,7 +167,6 @@ function AdminCases() {
     <AppShell
       me={me}
       title={t('allCases')}
-
       actions={
         <div>
           {casesQuery.isLoading
@@ -162,21 +188,20 @@ function AdminCases() {
         onSearchChange={setSearch}
         searchPlaceholder={t('searchCases')}
         isLoading={casesQuery.isLoading}
-        emptyTitle={overdueOnly ? t('noOverdueCases') : t('noCases')}
+        emptyTitle={filters.overdueOnly ? t('noOverdueCases') : t('noCases')}
         emptyDescription={
-          overdueOnly ? t('noOverdueCasesHint') : t('noCasesHint')
+          filters.overdueOnly ? t('noOverdueCasesHint') : t('noCasesHint')
         }
         onRowClick={(row) => router.push(`/admin/cases/${row.id}`)}
         toolbar={
-          <ToggleChip
-            pressed={overdueOnly}
-            onPressedChange={(pressed) => {
-              setOverdueOnly(pressed);
+          <CaseListFilters
+            showTehsil
+            value={filters}
+            onChange={(next) => {
+              setFilters(next);
               onPaginationChange((prev) => ({ ...prev, pageIndex: 0 }));
             }}
-          >
-            {t('overdueOnly')}
-          </ToggleChip>
+          />
         }
       />
       <CaseLifecycleTimeline className="mt-2" />

@@ -23,21 +23,18 @@ export function ToggleChip({
       aria-pressed={pressed}
       onClick={() => onPressedChange(!pressed)}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-none border px-3 py-1 text-[11px] font-medium uppercase tracking-wider transition-colors',
+        'inline-flex items-center gap-1.5 rounded-none border px-3 py-1 text-[11px] font-medium uppercase tracking-wider transition-colors h-8',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50',
         pressed
           ? 'border-transparent bg-sla-overdue-bg text-sla-overdue'
           : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
-        className,
+        className
       )}
       {...props}
     >
       <span
         aria-hidden
-        className={cn(
-          'size-1.5',
-          pressed ? 'bg-sla-overdue' : 'bg-border',
-        )}
+        className={cn('size-1.5', pressed ? 'bg-sla-overdue' : 'bg-border')}
       />
       {children}
     </button>

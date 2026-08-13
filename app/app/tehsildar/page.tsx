@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation';
 import { PlusIcon, XIcon } from '@phosphor-icons/react';
 
 import { AppShell } from '@/components/app-shell';
+import {
+  CaseListFilters,
+  type CaseListFilterValues,
+} from '@/components/cases/case-list-filters';
 import { CaseLifecycleTimeline } from '@/components/cases/case-lifecycle-timeline';
 import { CaseTable } from '@/components/cases/case-table';
 import { RoleGate } from '@/components/role-gate';
@@ -13,7 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorNote, TableSkeleton } from '@/components/ui/feedback';
 import { Field, FileInput, Input, Textarea } from '@/components/ui/field';
-import { ToggleChip } from '@/components/ui/toggle-chip';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { listQuery } from '@/hooks/use-server-table-state';
 import { useMe } from '@/hooks/use-me';
 import { useLocale } from '@/hooks/use-locale';
 import { api, apiGet } from '@/lib/api';
@@ -35,15 +40,29 @@ function TehsildarHome() {
   const [mapFile, setMapFile] = useState<File | null>(null);
   const [challanFile, setChallanFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [filters, setFilters] = useState<CaseListFilterValues>({
+    stage: '',
+    overdueOnly: false,
+    tehsilId: '',
+  });
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
 
   const casesQuery = useQuery({
-    queryKey: [...queryKeys.cases, { overdueOnly }] as const,
+    queryKey: [
+      ...queryKeys.cases,
+      'tehsildar',
+      { ...filters, q: debouncedSearch },
+    ] as const,
     queryFn: async () => {
-      const q = overdueOnly
-        ? '/api/v1/cases?limit=50&overdue=true'
-        : '/api/v1/cases?limit=50';
-      const res = await apiGet<PaginatedCases>(q);
+      const res = await apiGet<PaginatedCases>(
+        `/api/v1/cases${listQuery({
+          limit: 50,
+          overdue: filters.overdueOnly || undefined,
+          stage: filters.stage || undefined,
+          q: debouncedSearch.trim() || undefined,
+        })}`,
+      );
       return res.data;
     },
   });
@@ -215,10 +234,15 @@ function TehsildarHome() {
         </Card>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <ToggleChip pressed={overdueOnly} onPressedChange={setOverdueOnly}>
-          {t('overdueOnly')}
-        </ToggleChip>
+      <div className="flex flex-col gap-3">
+        <Field label={t('search')} className="max-w-md">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('searchCases')}
+          />
+        </Field>
+        <CaseListFilters value={filters} onChange={setFilters} />
       </div>
 
       {casesQuery.isLoading ? (
@@ -227,7 +251,7 @@ function TehsildarHome() {
         <CaseTable
           cases={cases}
           detailBase="/tehsildar/cases"
-          overdueOnly={overdueOnly}
+          overdueOnly={filters.overdueOnly}
           emptyAction={newCaseButton}
         />
       )}

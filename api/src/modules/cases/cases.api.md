@@ -39,7 +39,7 @@ Overdue: `now > guaranteeDueAt` and stage â‰  `ECOURT_UPLOADED`. Closed eCourt â
 | Method | URL | Access | Description |
 |--------|-----|--------|-------------|
 | POST | `/api/v1/cases` | tehsildar | Create case; optional map/challan files |
-| GET | `/api/v1/cases` | admin, tehsildar, ri | List; `stage`, `overdue=true`, `q`, `page`, `limit` (default 20). RI: assigned + active stages only |
+| GET | `/api/v1/cases` | admin, tehsildar, ri | List; `stage`, `overdue=true`, `tehsilId` (admin), `q`, `page`, `limit` (default 20). RI: assigned + active stages only |
 | GET | `/api/v1/cases/:id` | admin, tehsildar, assigned RI (active) | Detail + download URLs + `allowedNext` |
 | GET | `/api/v1/cases/:id/transitions` | staff with case access (same RI rules) | Transition audit timeline |
 | POST | `/api/v1/cases/:id/transitions` | tehsildar, assigned RI, admin (eCourt only) | Advance stage (writes audit row) |
@@ -82,7 +82,7 @@ Response includes updated case + SLA fields + `allowedNext`.
 
 ## GET `/api/v1/cases/:id`
 
-Includes hearing/stage/SLA fields, `ecourtReference`, `allowedNext` (admin gets eCourt only when `ORDER_ISSUED`).
+Includes hearing/stage/SLA fields, `ecourtReference`, `allowedNext` (admin gets eCourt only when `ORDER_ISSUED`), and `assignedRiName` (resolved display name for `assignedRiId`, or `null`).
 
 ## Frontend notes
 

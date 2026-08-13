@@ -137,7 +137,7 @@ export function CaseDetailView({
               {detail.applicantContact || '—'}
             </Detail>
             <Detail label={t('assignedRi')}>
-              {detail.assignedRiId || '—'}
+              {detail.assignedRiName || detail.assignedRiId || '—'}
             </Detail>
             <Detail label={t('hearing')}>
               {formatDateTime(locale, detail.hearingAt)}

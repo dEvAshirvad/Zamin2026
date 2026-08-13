@@ -12,6 +12,7 @@ import {
   presignGetObject,
   putObject,
 } from '@/configs/s3';
+import { findUserById } from '@/lib/auth/create-staff-user';
 import { escapeRegex } from '@/lib/escape-regex';
 import { createPaginationResult } from '@/lib/paginator';
 import { TehsilModel } from '@/modules/tehsils/tehsil.model';
@@ -159,6 +160,18 @@ function serializeCase(doc: CaseDoc & { _id: unknown }) {
   };
 }
 
+async function resolveAssignedRiName(
+  assignedRiId: string | null | undefined,
+): Promise<string | null> {
+  if (!assignedRiId)
+    return null;
+  const user = await findUserById(assignedRiId);
+  if (!user)
+    return null;
+  const name = typeof user.name === 'string' ? user.name.trim() : '';
+  return name || null;
+}
+
 export async function createCase(user: AuthUser, input: CreateCaseInput) {
   if (user.role !== 'tehsildar' || !user.tehsilId) {
     throw new APIError({
@@ -284,6 +297,7 @@ export async function listCases(
     stage?: string;
     overdue?: boolean;
     q?: string;
+    tehsilId?: string;
     pagination: PaginationQuery;
   },
 ) {
@@ -298,6 +312,9 @@ export async function listCases(
       });
     }
     filter.tehsilId = user.tehsilId;
+  }
+  else if (opts.tehsilId?.trim()) {
+    filter.tehsilId = opts.tehsilId.trim();
   }
 
   // RI: only own assignments, only while RI still has pipeline work.
@@ -373,6 +390,7 @@ export async function getCaseById(user: AuthUser, caseId: string) {
   let mapDownloadUrl: string | null = null;
   let challanDownloadUrl: string | null = null;
   const allowedNext = getAllowedNextForUser(user, doc.stage as CaseStage);
+  const assignedRiName = await resolveAssignedRiName(doc.assignedRiId);
 
   if (isS3Configured()) {
     if (doc.mapObjectKey) {
@@ -403,6 +421,7 @@ export async function getCaseById(user: AuthUser, caseId: string) {
 
   return {
     ...base,
+    assignedRiName,
     mapDownloadUrl,
     challanDownloadUrl,
     allowedNext,
@@ -667,8 +686,10 @@ export async function transitionCase(
       toStage === 'ECOURT_UPLOADED' ? (doc.ecourtReference ?? null) : null,
   });
 
+  const serialized = serializeCase(doc.toObject());
   return {
-    ...serializeCase(doc.toObject()),
+    ...serialized,
+    assignedRiName: await resolveAssignedRiName(serialized.assignedRiId),
     allowedNext: getAllowedNextForUser(user, doc.stage),
   };
 }

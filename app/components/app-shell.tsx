@@ -21,7 +21,6 @@ import { useLocale } from '@/hooks/use-locale';
 import type { MeUser, PlatformRole } from '@/lib/auth-client';
 import { signOut } from '@/lib/auth-client';
 import type { MessageKey } from '@/lib/i18n';
-import { queryKeys } from '@/lib/query-keys';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -129,7 +128,7 @@ function UserBlock({ me }: { me: MeUser }) {
 
   async function onSignOut() {
     await signOut();
-    await queryClient.invalidateQueries({ queryKey: queryKeys.session });
+    queryClient.clear();
     router.replace('/login');
   }
 

@@ -160,6 +160,10 @@ router.post(
  *         schema: { type: boolean }
  *         description: Filter cases past guaranteeDueAt and not ECOURT_UPLOADED
  *       - in: query
+ *         name: tehsilId
+ *         schema: { type: string }
+ *         description: Admin only — filter by tehsil
+ *       - in: query
  *         name: q
  *         schema: { type: string }
  *         description: Search case no, applicant, village, or challan ref
@@ -180,10 +184,13 @@ router.get('/', ...staffRead, async (req, res, next) => {
     const overdue
       = overdueRaw === 'true' || overdueRaw === '1';
     const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    const tehsilId
+      = typeof req.query.tehsilId === 'string' ? req.query.tehsilId : undefined;
     const result = await listCases(req.user!, {
       stage,
       overdue,
       q,
+      tehsilId,
       pagination: parsePagination(req),
     });
     return Respond(res, result);
