@@ -14,8 +14,8 @@ import {
   XIcon,
 } from '@phosphor-icons/react';
 
-import { BrandLockup } from '@/components/brand-mark';
 import { LocaleToggle } from '@/components/locale-toggle';
+import { SiteBrand } from '@/components/site';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/hooks/use-locale';
 import type { MeUser, PlatformRole } from '@/lib/auth-client';
@@ -189,21 +189,19 @@ export function AppShell({
   return (
     <div className="flex min-h-full flex-1">
       {/* Sidebar — lg and up */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col justify-between border-r  border-sidebar-border bg-sidebar lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col justify-between border-r border-sidebar-border bg-sidebar lg:flex">
         <div className="flex flex-col gap-5">
-          <Link href="/" className="border-b  p-3 py-4 border-sidebar-border">
-            <BrandLockup wordmark={t('brand')} tagline={t('brandTagline')} />
-          </Link>
+          <div className="border-b border-sidebar-border p-3 py-4">
+            <SiteBrand compact />
+          </div>
           <NavLinks me={me} className="px-3" />
         </div>
         <UserBlock me={me} />
       </aside>
 
       {/* Mobile top bar */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b  border-border bg-sidebar p-3 lg:hidden">
-        <Link href="/">
-          <BrandLockup wordmark={t('brand')} />
-        </Link>
+      <div className="fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-border bg-sidebar p-3 lg:hidden">
+        <SiteBrand compact />
         <div className="flex items-center gap-2">
           <LocaleToggle />
           <Button
@@ -234,7 +232,7 @@ export function AppShell({
         >
           <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-6 py-6">
             <div className="min-w-0 space-y-1">
-              <h1 className="text-[28px] leading-9 font-semibold tracking-[0.03em]">
+              <h1 className="font-heading text-[28px] leading-9 tracking-[0.03em]">
                 {title}
               </h1>
               {description ? (

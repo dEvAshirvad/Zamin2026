@@ -28,15 +28,15 @@ function TehsildarCaseDetail({ id }: { id: string }) {
   if (!me) return null;
 
   return (
-    <AppShell me={me} title={t('caseDetail')} width="narrow">
+    <AppShell me={me} title={t('caseDetail')}>
       {detailQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">{t('loading')}</p>
       ) : detailQuery.data ? (
-        <>
+        <div className="max-w-3xl mx-auto space-y-6">
           <CaseDetailView detail={detailQuery.data} backHref="/tehsildar" />
           <CaseTransitions detail={detailQuery.data} mode="tehsildar" />
           <CaseTransitionHistory caseId={id} />
-        </>
+        </div>
       ) : (
         <p className="text-sm text-destructive">Case not found</p>
       )}

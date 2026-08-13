@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import {
-  Geist,
-  Geist_Mono,
+  Courier_Prime,
   IBM_Plex_Sans_Devanagari,
+  Special_Elite,
 } from 'next/font/google';
 
 import { QueryProvider } from '@/components/providers/query-provider';
@@ -10,17 +10,19 @@ import { cn } from '@/lib/utils';
 
 import './globals.css';
 
-// Latin → Geist; Devanagari falls through to Plex Sans Devanagari.
-// Stack order lives in globals.css (`--font-sans`); these publish CSS vars.
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+// Archivist stack: Courier Prime body/mono, Special Elite headings.
+// Devanagari falls through to Plex Sans Devanagari.
+const courierPrime = Courier_Prime({
+  variable: '--font-courier',
   subsets: ['latin'],
+  weight: ['400', '700'],
   display: 'swap',
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const specialElite = Special_Elite({
+  variable: '--font-elite',
   subsets: ['latin'],
+  weight: '400',
   display: 'swap',
 });
 
@@ -52,12 +54,12 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       className={cn(
         'h-full',
         'antialiased',
-        geistSans.variable,
-        geistMono.variable,
+        courierPrime.variable,
+        specialElite.variable,
         plexDevanagari.variable,
       )}
     >
-      <body className="flex min-h-full flex-col bg-background text-foreground">
+      <body className="flex min-h-full flex-col bg-background font-sans text-foreground">
         <QueryProvider>{children}</QueryProvider>
       </body>
     </html>

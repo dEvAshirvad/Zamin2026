@@ -1,11 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { BrandMark } from '@/components/brand-mark';
 import { LocaleToggle } from '@/components/locale-toggle';
+import { SiteFooter, SiteHeader, SiteNav } from '@/components/site';
 import { Button } from '@/components/ui/button';
 import { ErrorNote } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
@@ -13,6 +13,15 @@ import { useLocale } from '@/hooks/use-locale';
 import { useMe } from '@/hooks/use-me';
 import { homeForRole, signInEmail, type PlatformRole } from '@/lib/auth-client';
 import { queryKeys } from '@/lib/query-keys';
+
+function formatLiveDate(d: Date) {
+  return d.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,6 +33,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const year = new Date().getFullYear();
+  const liveDate = useMemo(() => formatLiveDate(new Date()), []);
 
   useEffect(() => {
     if (isFetched && me?.role) {
@@ -59,28 +69,39 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-background">
-      {/* Masthead — matches rid.rdmp.in/pages/login.html */}
-      <header className="border-b border-border bg-muted py-6">
-        <div className="mx-auto w-full max-w-195 px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 flex-1 items-center gap-4">
-              <BrandMark className="size-16 shrink-0 text-ring" />
-              <div className="flex min-w-0 flex-col">
-                <span className="text-micro text-muted-foreground">
-                  {t('brandStamp')}
-                </span>
-                <span className="mt-0.5 text-[1.75rem] font-semibold leading-tight tracking-[0.03em] text-foreground">
-                  {t('brand')}
-                </span>
-                <p className="mt-1 text-xs tracking-[0.08em] text-muted-foreground">
-                  {t('brandTagline')}
-                </p>
-              </div>
+      <SiteHeader
+        rule="double"
+        meta={
+          <>
+            <span>{liveDate}</span>
+            <br />
+            Raipur, Chhattisgarh 492001
+            <br />
+            <a
+              href="https://raipur.gov.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[0.68rem] text-ring underline underline-offset-2 hover:text-foreground"
+            >
+              raipur.gov.in →
+            </a>
+            <div className="mt-1.5 sm:flex sm:justify-end">
+              <LocaleToggle />
             </div>
-            <LocaleToggle className="shrink-0" />
-          </div>
-        </div>
-      </header>
+          </>
+        }
+        nav={
+          <SiteNav
+            items={[
+              { href: '/', label: 'Home', active: true },
+              { href: '/#modules', label: 'Modules' },
+              { href: '/#officials', label: 'Officials' },
+              { href: '/#contact', label: 'Contact' },
+              { href: '/login', label: t('portalLogin'), portal: true },
+            ]}
+          />
+        }
+      />
 
       <main className="flex flex-1 flex-col px-6 py-10 sm:py-14">
         <div className="mx-auto w-full max-w-105 border border-border bg-muted p-8 sm:p-10">
@@ -88,7 +109,7 @@ export default function LoginPage() {
             <span className="text-micro text-muted-foreground">
               {t('secureAccess')}
             </span>
-            <h1 className="mt-1.5 text-2xl font-semibold tracking-[0.03em] text-foreground">
+            <h1 className="mt-1.5 font-heading text-2xl tracking-[0.03em] text-foreground">
               {t('loginTitle')}
             </h1>
             <p className="mt-2 text-xs text-muted-foreground">
@@ -134,13 +155,55 @@ export default function LoginPage() {
         </div>
       </main>
 
-      <footer className="border-t  border-border bg-muted py-6">
-        <div className="mx-auto w-full max-w-195 px-6">
-          <p className="text-center text-[0.68rem] tracking-[0.06em] text-muted-foreground">
-            © {year} {t('loginFooter')}
-          </p>
-        </div>
-      </footer>
+      <SiteFooter
+        rule="single"
+        columns={[
+          {
+            title: 'Quick Links',
+            links: [
+              { href: '/', label: 'Home' },
+              { href: '/login', label: t('portalLogin') },
+            ],
+          },
+          {
+            title: 'External Portals',
+            links: [
+              {
+                href: 'https://raipur.gov.in',
+                label: 'District Raipur',
+                external: true,
+              },
+              {
+                href: 'https://cgstate.gov.in',
+                label: 'Chhattisgarh State',
+                external: true,
+              },
+            ],
+          },
+          {
+            title: 'Contact',
+            body: (
+              <p className="mb-2">
+                Collectorate, Naya Raipur
+                <br />
+                Chhattisgarh 492002
+              </p>
+            ),
+            links: [
+              { href: 'tel:07712426024', label: '0771-2426024' },
+              {
+                href: 'mailto:collector-rpr.cg@gov.in',
+                label: 'collector-rpr.cg@gov.in',
+              },
+            ],
+          },
+        ]}
+        bottom={
+          <>
+            © {year} {t('brand')}. {t('loginFooter')}
+          </>
+        }
+      />
     </div>
   );
 }

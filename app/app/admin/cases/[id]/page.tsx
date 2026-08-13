@@ -28,19 +28,15 @@ function AdminCaseDetail({ id }: { id: string }) {
   if (!me) return null;
 
   return (
-    <AppShell
-      me={me}
-      title={detailQuery.data?.caseNo ?? t('caseDetail')}
-      width="narrow"
-    >
+    <AppShell me={me} title={detailQuery.data?.caseNo ?? t('caseDetail')}>
       {detailQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">{t('loading')}</p>
       ) : detailQuery.data ? (
-        <>
+        <div className="max-w-3xl mx-auto space-y-6">
           <CaseDetailView detail={detailQuery.data} backHref="/admin/cases" />
           <CaseTransitions detail={detailQuery.data} mode="admin" />
           <CaseTransitionHistory caseId={id} />
-        </>
+        </div>
       ) : (
         <p className="text-sm text-destructive">Case not found</p>
       )}

@@ -32,7 +32,7 @@ describe('case.helpers', () => {
     expect(normalizeKhasras(['12', '12', ' 13 '])).toEqual(['12', '13']);
   });
 
-  it('shows RI only assigned cases while RI work is active', () => {
+  it('shows RI assigned cases while active and after handoff (read-only)', () => {
     expect(isCaseVisibleToRi({
       assignedRiId: 'ri-1',
       riUserId: 'ri-1',
@@ -57,6 +57,11 @@ describe('case.helpers', () => {
       assignedRiId: 'ri-1',
       riUserId: 'ri-1',
       stage: 'DEMARCATION_DONE',
-    })).toBe(false);
+    })).toBe(true);
+    expect(isCaseVisibleToRi({
+      assignedRiId: 'ri-1',
+      riUserId: 'ri-1',
+      stage: 'ORDER_ISSUED',
+    })).toBe(true);
   });
 });

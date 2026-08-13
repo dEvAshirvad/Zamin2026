@@ -24,8 +24,8 @@ export const OPEN_CASE_STAGES: CaseStage[] = [
 ];
 
 /**
- * Stages where the assigned RI still has work (notice → demarcation).
- * After DEMARCATION_DONE, tehsildar owns the case — RI must not see it.
+ * Stages where the assigned RI still has pipeline work (notice → demarcation).
+ * List inbox uses this set; after DEMARCATION_DONE tehsildar owns advancing.
  */
 export const RI_ACTIVE_STAGES: CaseStage[] = [
   'MEMO_ISSUED',
@@ -34,7 +34,15 @@ export const RI_ACTIVE_STAGES: CaseStage[] = [
   'OBJECTIONS_WINDOW',
 ];
 
-/** Assigned RI + still in RI pipeline — list/detail visibility. */
+/** Stages the assigned RI may still open read-only after handoff. */
+export const RI_VIEWABLE_STAGES: CaseStage[] = [
+  ...RI_ACTIVE_STAGES,
+  'DEMARCATION_DONE',
+  'ORDER_ISSUED',
+  'ECOURT_UPLOADED',
+];
+
+/** Assigned RI — detail visibility (active work + completed handoff). */
 export function isCaseVisibleToRi(opts: {
   assignedRiId: string | null | undefined;
   riUserId: string;
@@ -42,7 +50,7 @@ export function isCaseVisibleToRi(opts: {
 }): boolean {
   return (
     opts.assignedRiId === opts.riUserId
-    && (RI_ACTIVE_STAGES as readonly string[]).includes(opts.stage)
+    && (RI_VIEWABLE_STAGES as readonly string[]).includes(opts.stage)
   );
 }
 

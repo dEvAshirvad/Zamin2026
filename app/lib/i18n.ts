@@ -114,6 +114,8 @@ const en = {
   'noteOptional': 'Note',
   'transitionFailed': 'Could not advance the case',
   'hearingRequired': 'Hearing date and time is required',
+  'riWorkDone': 'Your work is done',
+  'riWorkDoneNote': 'Forwarded to Tehsildar. No further action needed from you.',
 
   // Case create
   'newCase': 'New case',
@@ -366,6 +368,8 @@ const hi: Record<MessageKey, string> = {
   'noteOptional': 'टिप्पणी',
   'transitionFailed': 'प्रकरण आगे नहीं बढ़ाया जा सका',
   'hearingRequired': 'सुनवाई तिथि व समय आवश्यक है',
+  'riWorkDone': 'आपका कार्य पूर्ण हो गया',
+  'riWorkDoneNote': 'तहसीलदार को अग्रेषित। आपकी ओर से और कोई कार्रवाई नहीं।',
 
   // Case create
   'newCase': 'नया प्रकरण',

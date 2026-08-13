@@ -5,9 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ---------------------------------------------------------------------------
-   ज़मीन / Zamin — Archivist / airmail tokens (ported from Raipur portal).
-   SLA hues stay reserved for deadline status only; values are airmail blues
-   + carbon pink (no green/amber/red decoration elsewhere).
+   सीमांकन / Simankan — Archivist tokens (green paper stack).
+   SLA hues stay reserved for deadline status only; values are airmail greens
+   + carbon pink (no amber/red decoration elsewhere).
    Primary CTA is ink (#1a1e22) so it never reads as an SLA colour.
 --------------------------------------------------------------------------- */
 
@@ -17,7 +17,7 @@
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-heading);
 
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -76,117 +76,118 @@
 }
 
 :root {
-  /* Latin → Geist; Devanagari has no glyphs there and falls through to
-     Plex Sans Devanagari. Hindi is the DEFAULT locale — this ordering is
-     load-bearing, not cosmetic. */
+  /* Archivist: Courier Prime body; Special Elite headings.
+     Devanagari falls through to Plex — ordering is load-bearing. */
   --font-sans:
-    var(--font-geist-sans), var(--font-plex-deva), system-ui, -apple-system,
-    "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+    var(--font-courier), var(--font-plex-deva), "Courier New", monospace;
+  --font-mono:
+    var(--font-courier), var(--font-plex-deva), "Courier New", monospace;
+  --font-heading:
+    var(--font-elite), var(--font-plex-deva), serif;
 
-  /* Airmail paper */
-  --background: #f2f6f9;
+  /* Airmail paper (green stack — same lightness as prior blues) */
+  --background: #f2f7f4;
   --foreground: #1a1e22;
   --card: #ffffff;
   --card-foreground: #1a1e22;
   --popover: #ffffff;
   --popover-foreground: #1a1e22;
 
-  /* Ink CTA; accent blue for wash / ring / charts */
+  /* Ink CTA; accent green for wash / ring / charts */
   --primary: #1a1e22;
-  --primary-foreground: #f2f6f9;
-  --primary-hover: #2e6a8a;
-  --primary-wash: #e5eef4;
+  --primary-foreground: #f2f7f4;
+  --primary-hover: #2e6a4a;
+  --primary-wash: #e5f0ea;
 
-  --secondary: #e5eef4;
+  --secondary: #e5f0ea;
   --secondary-foreground: #1a1e22;
-  --muted: #e5eef4;
-  --muted-foreground: #5c7585;
-  --accent: #e5eef4;
+  --muted: #e5f0ea;
+  --muted-foreground: #5c7568;
+  --accent: #e5f0ea;
   --accent-foreground: #1a1e22;
 
   --destructive: #b87a72;
-  --destructive-foreground: #f2f6f9;
+  --destructive-foreground: #f2f7f4;
 
-  --border: #b8ccda;
-  --input: #b8ccda;
-  --ring: #2e6a8a;
+  --border: #b8cfc0;
+  --input: #b8cfc0;
+  --ring: #2e6a4a;
 
-  /* SLA → airmail blues + carbon pink */
-  --sla-ontrack: #2e6a8a;
-  --sla-ontrack-bg: #e5eef4;
-  --sla-duesoon: #7fa8b8;
-  --sla-duesoon-bg: #eef4f7;
+  /* SLA → airmail greens + carbon pink */
+  --sla-ontrack: #2e6a4a;
+  --sla-ontrack-bg: #e5f0ea;
+  --sla-duesoon: #7fad8f;
+  --sla-duesoon-bg: #eef5f1;
   --sla-overdue: #b87a72;
   --sla-overdue-bg: #f8f0ef;
 
   --chart-1: #1a1e22;
-  --chart-2: #2e6a8a;
-  --chart-3: #7fa8b8;
-  --chart-4: #b8ccda;
-  --chart-5: #e5eef4;
+  --chart-2: #2e6a4a;
+  --chart-3: #7fad8f;
+  --chart-4: #b8cfc0;
+  --chart-5: #e5f0ea;
 
   --radius: 0;
 
-  --sidebar: #e5eef4;
+  --sidebar: #e5f0ea;
   --sidebar-foreground: #1a1e22;
   --sidebar-primary: #1a1e22;
-  --sidebar-primary-foreground: #f2f6f9;
+  --sidebar-primary-foreground: #f2f7f4;
   --sidebar-accent: #1a1e22;
-  --sidebar-accent-foreground: #f2f6f9;
-  --sidebar-border: #b8ccda;
-  --sidebar-ring: #2e6a8a;
+  --sidebar-accent-foreground: #f2f7f4;
+  --sidebar-border: #b8cfc0;
+  --sidebar-ring: #2e6a4a;
 }
 
 .dark {
-  /* Cool ink surfaces — redesigned, not inverted. */
-  --background: #12161a;
-  --foreground: #e5eef4;
-  --card: #1a2228;
-  --card-foreground: #e5eef4;
-  --popover: #1e272e;
-  --popover-foreground: #e5eef4;
+  /* Cool ink surfaces — green stack, not inverted. */
+  --background: #121615;
+  --foreground: #e5f0ea;
+  --card: #1a221e;
+  --card-foreground: #e5f0ea;
+  --popover: #1e2722;
+  --popover-foreground: #e5f0ea;
 
-  --primary: #e5eef4;
-  --primary-foreground: #12161a;
-  --primary-hover: #7fa8b8;
-  --primary-wash: #243039;
+  --primary: #e5f0ea;
+  --primary-foreground: #121615;
+  --primary-hover: #7fad8f;
+  --primary-wash: #243029;
 
-  --secondary: #1e272e;
-  --secondary-foreground: #e5eef4;
-  --muted: #1e272e;
-  --muted-foreground: #7fa8b8;
-  --accent: #243039;
-  --accent-foreground: #e5eef4;
+  --secondary: #1e2722;
+  --secondary-foreground: #e5f0ea;
+  --muted: #1e2722;
+  --muted-foreground: #7fad8f;
+  --accent: #243029;
+  --accent-foreground: #e5f0ea;
 
   --destructive: #d4a09a;
-  --destructive-foreground: #12161a;
+  --destructive-foreground: #121615;
 
-  --border: #3a4a56;
-  --input: #3a4a56;
-  --ring: #7fa8b8;
+  --border: #3a4a42;
+  --input: #3a4a42;
+  --ring: #7fad8f;
 
-  --sla-ontrack: #7fa8b8;
-  --sla-ontrack-bg: #1e2a32;
-  --sla-duesoon: #a0c0cc;
-  --sla-duesoon-bg: #243039;
+  --sla-ontrack: #7fad8f;
+  --sla-ontrack-bg: #1e2a24;
+  --sla-duesoon: #a0c0ad;
+  --sla-duesoon-bg: #243029;
   --sla-overdue: #d4a09a;
   --sla-overdue-bg: #2e2220;
 
-  --chart-1: #e5eef4;
-  --chart-2: #7fa8b8;
-  --chart-3: #2e6a8a;
-  --chart-4: #5c7585;
-  --chart-5: #3a4a56;
+  --chart-1: #e5f0ea;
+  --chart-2: #7fad8f;
+  --chart-3: #2e6a4a;
+  --chart-4: #5c7568;
+  --chart-5: #3a4a42;
 
-  --sidebar: #1a2228;
-  --sidebar-foreground: #e5eef4;
-  --sidebar-primary: #e5eef4;
-  --sidebar-primary-foreground: #12161a;
-  --sidebar-accent: #e5eef4;
-  --sidebar-accent-foreground: #12161a;
-  --sidebar-border: #3a4a56;
-  --sidebar-ring: #7fa8b8;
+  --sidebar: #1a221e;
+  --sidebar-foreground: #e5f0ea;
+  --sidebar-primary: #e5f0ea;
+  --sidebar-primary-foreground: #121615;
+  --sidebar-accent: #e5f0ea;
+  --sidebar-accent-foreground: #121615;
+  --sidebar-border: #3a4a42;
+  --sidebar-ring: #7fad8f;
 }
 
 @layer base {
@@ -195,15 +196,24 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background font-sans text-foreground;
     /* Devanagari matras sit above and below the baseline. Never tighten this
        below 1.5 on text that can contain Hindi. */
-    line-height: 1.65;
+    line-height: 1.8;
     -webkit-font-smoothing: antialiased;
   }
 
   html {
     @apply font-sans;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    font-weight: normal;
+    letter-spacing: 0.03em;
   }
 
   button:not(:disabled),

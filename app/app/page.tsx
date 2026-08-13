@@ -3,25 +3,34 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-import { BrandMark } from '@/components/brand-mark';
-import { useLocale } from '@/hooks/use-locale';
+import { LandingHome } from '@/components/landing-home';
 import { useMe } from '@/hooks/use-me';
 import { homeForRole } from '@/lib/auth-client';
 
 export default function Home() {
   const router = useRouter();
   const { data: me, isFetched } = useMe();
-  const { t } = useLocale();
 
   useEffect(() => {
     if (!isFetched) return;
-    router.replace(me?.role ? homeForRole(me.role) : '/login');
+    if (me?.role) router.replace(homeForRole(me.role));
   }, [isFetched, me, router]);
 
-  return (
-    <main className="flex min-h-full flex-1 flex-col items-center justify-center gap-3 px-6 py-16">
-      <BrandMark className="size-7 animate-pulse text-ring" />
-      <p className="text-sm text-muted-foreground">{t('loading')}</p>
-    </main>
-  );
+  if (!isFetched) {
+    return (
+      <main className="flex min-h-full flex-1 flex-col items-center justify-center px-6 py-16">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </main>
+    );
+  }
+
+  if (me?.role) {
+    return (
+      <main className="flex min-h-full flex-1 flex-col items-center justify-center px-6 py-16">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </main>
+    );
+  }
+
+  return <LandingHome />;
 }
