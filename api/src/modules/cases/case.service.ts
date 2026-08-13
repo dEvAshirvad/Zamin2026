@@ -172,6 +172,34 @@ async function resolveAssignedRiName(
   return name || null;
 }
 
+/** Batch id → display name for list responses (one query). */
+async function resolveAssignedRiNameMap(
+  assignedRiIds: Array<string | null | undefined>,
+): Promise<Map<string, string>> {
+  const unique = [
+    ...new Set(
+      assignedRiIds.filter((id): id is string => Boolean(id?.trim())),
+    ),
+  ];
+  const map = new Map<string, string>();
+  if (unique.length === 0)
+    return map;
+
+  const users = await db
+    .collection('user')
+    .find({ id: { $in: unique } })
+    .project({ id: 1, name: 1 })
+    .toArray();
+
+  for (const user of users) {
+    const name = typeof user.name === 'string' ? user.name.trim() : '';
+    const id = typeof user.id === 'string' ? user.id : '';
+    if (id && name)
+      map.set(id, name);
+  }
+  return map;
+}
+
 export async function createCase(user: AuthUser, input: CreateCaseInput) {
   if (user.role !== 'tehsildar' || !user.tehsilId) {
     throw new APIError({
@@ -366,8 +394,16 @@ export async function listCases(
     CaseModel.countDocuments(filter),
   ]);
 
+  const rows = docs.map(doc => serializeCase(doc as CaseDoc & { _id: unknown }));
+  const riNames = await resolveAssignedRiNameMap(rows.map(r => r.assignedRiId));
+
   return createPaginationResult(
-    docs.map(doc => serializeCase(doc as CaseDoc & { _id: unknown })),
+    rows.map(row => ({
+      ...row,
+      assignedRiName: row.assignedRiId
+        ? riNames.get(row.assignedRiId) ?? null
+        : null,
+    })),
     total,
     page,
     limit,
