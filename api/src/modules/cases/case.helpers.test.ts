@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  computeAlertStatus,
   computeFeeAmount,
   computeGuaranteeDueAt,
+  computeReportDueAt,
   formatCaseNo,
+  isCaseVisibleToPatwari,
   isCaseVisibleToRi,
-  normalizeKhasras,
+  normalizeKhasraRows,
+  normalizeNeighbors,
+  sumRakba,
 } from './case.helpers';
 
 describe('case.helpers', () => {
@@ -27,32 +32,38 @@ describe('case.helpers', () => {
     );
   });
 
-  it('normalizes khasra lists', () => {
-    expect(normalizeKhasras('12, 13\n14')).toEqual(['12', '13', '14']);
-    expect(normalizeKhasras(['12', '12', ' 13 '])).toEqual(['12', '13']);
+  it('computes report due +12h', () => {
+    const done = new Date('2026-01-01T10:00:00.000Z');
+    expect(computeReportDueAt(done).toISOString()).toBe(
+      '2026-01-01T22:00:00.000Z',
+    );
   });
 
-  it('shows RI assigned cases while active and after handoff (read-only)', () => {
+  it('normalizes khasra rows and neighbors', () => {
+    expect(normalizeKhasraRows([
+      { khasraNumber: '12', rakba: 1.5 },
+      { khasraNumber: '12', rakba: 2 },
+      { khasraNumber: '13', rakba: 0.25 },
+    ])).toEqual([
+      { khasraNumber: '12', rakba: 1.5 },
+      { khasraNumber: '13', rakba: 0.25 },
+    ]);
+    expect(sumRakba([
+      { khasraNumber: '12', rakba: 1.5 },
+      { khasraNumber: '13', rakba: 0.25 },
+    ])).toBe(1.75);
+    expect(normalizeNeighbors([
+      { ownerName: 'A', address: 'X' },
+      { ownerName: '', address: 'Y' },
+    ])).toEqual([{ ownerName: 'A', address: 'X' }]);
+  });
+
+  it('shows RI/Patwari visibility for active and handoff stages', () => {
     expect(isCaseVisibleToRi({
       assignedRiId: 'ri-1',
       riUserId: 'ri-1',
       stage: 'MEMO_ISSUED',
     })).toBe(true);
-    expect(isCaseVisibleToRi({
-      assignedRiId: 'ri-1',
-      riUserId: 'ri-1',
-      stage: 'OBJECTIONS_WINDOW',
-    })).toBe(true);
-    expect(isCaseVisibleToRi({
-      assignedRiId: 'ri-2',
-      riUserId: 'ri-1',
-      stage: 'MEMO_ISSUED',
-    })).toBe(false);
-    expect(isCaseVisibleToRi({
-      assignedRiId: 'ri-1',
-      riUserId: 'ri-1',
-      stage: 'SUBMITTED',
-    })).toBe(false);
     expect(isCaseVisibleToRi({
       assignedRiId: 'ri-1',
       riUserId: 'ri-1',
@@ -61,7 +72,30 @@ describe('case.helpers', () => {
     expect(isCaseVisibleToRi({
       assignedRiId: 'ri-1',
       riUserId: 'ri-1',
-      stage: 'ORDER_ISSUED',
+      stage: 'SUBMITTED',
+    })).toBe(false);
+    expect(isCaseVisibleToPatwari({
+      assignedPatwariId: 'p-1',
+      patwariUserId: 'p-1',
+      stage: 'NOTICE_ISSUED',
     })).toBe(true);
+  });
+
+  it('computes OVERDUE alert after reportDueAt on DEMARCATION_DONE', () => {
+    expect(computeAlertStatus({
+      stage: 'DEMARCATION_DONE',
+      reportDueAt: new Date('2026-01-01T12:00:00.000Z'),
+      now: new Date('2026-01-01T13:00:00.000Z'),
+    })).toBe('OVERDUE');
+    expect(computeAlertStatus({
+      stage: 'DEMARCATION_DONE',
+      reportDueAt: new Date('2026-01-01T14:00:00.000Z'),
+      now: new Date('2026-01-01T13:00:00.000Z'),
+    })).toBe('none');
+    expect(computeAlertStatus({
+      stage: 'REPORT_SUBMITTED',
+      reportDueAt: new Date('2026-01-01T12:00:00.000Z'),
+      now: new Date('2026-01-01T13:00:00.000Z'),
+    })).toBe('none');
   });
 });

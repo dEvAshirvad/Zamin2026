@@ -10,29 +10,57 @@ describe('case.transitions', () => {
   it('allows tehsildar memo and order only', () => {
     expect(canTransition({ from: 'SUBMITTED', to: 'MEMO_ISSUED', role: 'tehsildar' })).toBe(true);
     expect(canTransition({ from: 'SUBMITTED', to: 'MEMO_ISSUED', role: 'ri' })).toBe(false);
-    expect(canTransition({ from: 'DEMARCATION_DONE', to: 'ORDER_ISSUED', role: 'tehsildar' })).toBe(true);
-    expect(canTransition({ from: 'DEMARCATION_DONE', to: 'ORDER_ISSUED', role: 'ri' })).toBe(false);
+    expect(canTransition({
+      from: 'REPORT_SUBMITTED',
+      to: 'ORDER_ISSUED',
+      role: 'tehsildar',
+    })).toBe(true);
+    expect(canTransition({
+      from: 'REPORT_SUBMITTED',
+      to: 'ORDER_ISSUED',
+      role: 'ri',
+    })).toBe(false);
   });
 
-  it('allows RI notice / objections / demarcation', () => {
+  it('allows RI and Patwari notice / demarcation / report', () => {
     expect(canTransition({
       from: 'MEMO_ISSUED',
       to: 'HEARING_SCHEDULED',
       role: 'ri',
     })).toBe(true);
     expect(canTransition({
-      from: 'HEARING_SCHEDULED',
-      to: 'DEMARCATION_DONE',
+      from: 'MEMO_ISSUED',
+      to: 'HEARING_SCHEDULED',
+      role: 'patwari',
+    })).toBe(true);
+    expect(canTransition({
+      from: 'MEMO_ISSUED',
+      to: 'NOTICE_ISSUED',
+      role: 'ri',
+    })).toBe(false);
+    expect(canTransition({
+      from: 'NOTICE_ISSUED',
+      to: 'HEARING_SCHEDULED',
       role: 'ri',
     })).toBe(true);
     expect(canTransition({
       from: 'HEARING_SCHEDULED',
-      to: 'OBJECTIONS_WINDOW',
+      to: 'DEMARCATION_WINDOW_OPEN',
+      role: 'ri',
+    })).toBe(true);
+    expect(canTransition({
+      from: 'HEARING_SCHEDULED',
+      to: 'OBJECTION_CLOSED',
+      role: 'patwari',
+    })).toBe(true);
+    expect(canTransition({
+      from: 'DEMARCATION_DONE',
+      to: 'REPORT_SUBMITTED',
       role: 'ri',
     })).toBe(true);
   });
 
-  it('rejects illegal jumps', () => {
+  it('rejects illegal jumps and eCourt', () => {
     expect(canTransition({
       from: 'SUBMITTED',
       to: 'ORDER_ISSUED',
@@ -47,28 +75,11 @@ describe('case.transitions', () => {
 
   it('lists role-filtered targets', () => {
     expect(allowedTargets('HEARING_SCHEDULED', 'ri')).toEqual([
-      'OBJECTIONS_WINDOW',
-      'DEMARCATION_DONE',
+      'OBJECTION_CLOSED',
+      'DEMARCATION_WINDOW_OPEN',
     ]);
     expect(allowedTargets('HEARING_SCHEDULED', 'tehsildar')).toEqual([]);
-  });
-
-  it('allows tehsildar or admin eCourt upload', () => {
-    expect(canTransition({
-      from: 'ORDER_ISSUED',
-      to: 'ECOURT_UPLOADED',
-      role: 'tehsildar',
-    })).toBe(true);
-    expect(canTransition({
-      from: 'ORDER_ISSUED',
-      to: 'ECOURT_UPLOADED',
-      role: 'admin',
-    })).toBe(true);
-    expect(canTransition({
-      from: 'ORDER_ISSUED',
-      to: 'ECOURT_UPLOADED',
-      role: 'ri',
-    })).toBe(false);
+    expect(allowedTargets('ORDER_ISSUED', 'tehsildar')).toEqual([]);
   });
 
   it('picks least-loaded RI with stable tie-break', () => {

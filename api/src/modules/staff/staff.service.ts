@@ -24,7 +24,7 @@ import { HttpErrorStatusCode } from '@/types/errors/errors.types';
 import { StaffCredentialModel } from './staff-credential.model';
 import { parseStaffImportFile } from './staff-import.parse';
 
-export type StaffImportRole = Extract<PlatformRole, 'tehsildar' | 'ri'>;
+export type StaffImportRole = Extract<PlatformRole, 'tehsildar' | 'ri' | 'patwari'>;
 
 export interface ImportRowResult {
   line: number;
@@ -147,7 +147,7 @@ export async function listStaff(filters: {
   pagination: PaginationQuery;
 }) {
   const query: Record<string, unknown> = {
-    role: { $in: ['tehsildar', 'ri', 'admin'] },
+    role: { $in: ['tehsildar', 'ri', 'patwari', 'admin'] },
   };
   if (filters.role) {
     query.role = filters.role;

@@ -396,7 +396,9 @@ export function MetricsCharts({ metrics }: { metrics: MetricsPayload }) {
   const onTrackOpen = pct(Math.max(0, open - metrics.overdue), open || 1);
 
   const bottleneck = useMemo(() => {
-    const active = metrics.byStage.filter((s) => s.stage !== 'ECOURT_UPLOADED');
+    const active = metrics.byStage.filter(
+      (s) => s.stage !== 'ORDER_ISSUED' && s.stage !== 'OBJECTION_CLOSED',
+    );
     if (active.length === 0) return null;
     return active.reduce((a, b) => (b.count > a.count ? b : a));
   }, [metrics.byStage]);

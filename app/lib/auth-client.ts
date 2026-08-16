@@ -1,6 +1,6 @@
 import { api, apiGet } from '@/lib/api';
 
-export type PlatformRole = 'admin' | 'tehsildar' | 'ri';
+export type PlatformRole = 'admin' | 'tehsildar' | 'ri' | 'patwari';
 
 export interface MeUser {
   id: string;
@@ -21,6 +21,7 @@ export function homeForRole(role: PlatformRole | null | undefined): string {
   if (role === 'admin') return '/admin';
   if (role === 'tehsildar') return '/tehsildar';
   if (role === 'ri') return '/ri';
+  if (role === 'patwari') return '/patwari';
   return '/login';
 }
 

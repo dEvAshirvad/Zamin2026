@@ -23,20 +23,21 @@ describe('case.sla', () => {
     expect(computeStageDueAt({
       stage: 'DEMARCATION_DONE',
       stageChangedAt: t0,
-    })?.toISOString()).toBe('2026-01-03T00:00:00.000Z');
+      reportDueAt: new Date('2026-01-01T12:00:00.000Z'),
+    })?.toISOString()).toBe('2026-01-01T12:00:00.000Z');
     expect(computeStageDueAt({
       stage: 'ORDER_ISSUED',
       stageChangedAt: t0,
     })).toBeNull();
   });
 
-  it('uses hearingAt for hearing scheduled due', () => {
-    const hearing = new Date('2026-02-10T10:00:00.000Z');
+  it('uses demarcationAt for notice-issued stage due', () => {
+    const demarcationAt = new Date('2026-02-10T10:00:00.000Z');
     expect(computeStageDueAt({
       stage: 'HEARING_SCHEDULED',
       stageChangedAt: new Date('2026-02-01T00:00:00.000Z'),
-      hearingAt: hearing,
-    })?.toISOString()).toBe(hearing.toISOString());
+      demarcationAt,
+    })?.toISOString()).toBe(demarcationAt.toISOString());
   });
 
   it('computes guarantee day delta and sla status', () => {
@@ -49,7 +50,12 @@ describe('case.sla', () => {
       now: new Date('2026-02-05T00:00:00.000Z'),
     })).toBe('overdue');
     expect(computeSlaStatus({
-      stage: 'ECOURT_UPLOADED',
+      stage: 'ORDER_ISSUED',
+      guaranteeDueAt: due,
+      now: new Date('2026-02-05T00:00:00.000Z'),
+    })).toBe('closed');
+    expect(computeSlaStatus({
+      stage: 'OBJECTION_CLOSED',
       guaranteeDueAt: due,
       now: new Date('2026-02-05T00:00:00.000Z'),
     })).toBe('closed');

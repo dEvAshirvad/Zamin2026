@@ -1,74 +1,111 @@
 'use client';
 
 import { useLocale } from '@/hooks/use-locale';
-import { STAGE_ORDER, stageShortLabel } from '@/lib/i18n';
+import {
+  OBJECTION_STAGE,
+  STAGE_ORDER,
+  stageShortLabel,
+} from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
- * The eight-stage track. The pipeline *is* the product — before this, the
- * current stage was a single grey pill and the shape of the process was
- * invisible. See design.md §7.1.
- *
- * Horizontal from md up, vertical below.
+ * Horizontal stage slider / stepper for the demarcation pipeline.
+ * Objection-closed cases show a branch marker instead of the demarcation path.
  */
-export function StageStepper({ current }: { current: string }) {
-  const { locale } = useLocale();
-  const currentIndex = STAGE_ORDER.indexOf(
-    current as (typeof STAGE_ORDER)[number],
-  );
+export function StageStepper({
+  current,
+  alertOverdue = false,
+}: {
+  current: string;
+  alertOverdue?: boolean;
+}) {
+  const { locale, t } = useLocale();
+  const objectionPath = current === OBJECTION_STAGE;
+  const stages = objectionPath
+    ? ([
+        'SUBMITTED',
+        'MEMO_ISSUED',
+        'HEARING_SCHEDULED',
+        OBJECTION_STAGE,
+      ] as const)
+    : STAGE_ORDER;
+
+  const currentIndex = (stages as readonly string[]).indexOf(current);
 
   return (
-    <ol className="flex flex-col md:flex-row">
-      {STAGE_ORDER.map((stage, i) => {
-        const done = currentIndex > i;
-        const active = currentIndex === i;
-        const isLast = i === STAGE_ORDER.length - 1;
+    <div className="space-y-3">
+      <div className="overflow-x-auto pb-1">
+        <ol className="flex min-w-max gap-0 md:min-w-0 md:w-full">
+          {stages.map((stage, i) => {
+            const done = currentIndex > i;
+            const active = currentIndex === i;
+            const isLast = i === stages.length - 1;
+            const overdueHere =
+              alertOverdue && stage === 'DEMARCATION_DONE' && active;
 
-        return (
-          <li
-            key={stage}
-            aria-current={active ? 'step' : undefined}
-            className="flex min-w-0 gap-3 md:flex-1 md:flex-col md:gap-2"
-          >
-            <div className="flex flex-col items-center md:w-full md:flex-row md:items-center">
-              <span
-                className={cn(
-                  'flex size-3.5 shrink-0 items-center justify-center rounded-none border-2 transition-colors',
-                  done && 'border-primary bg-primary',
-                  active && 'border-ring bg-card ring-2 ring-ring/30',
-                  !done && !active && 'border-border bg-card',
-                )}
+            return (
+              <li
+                key={stage}
+                aria-current={active ? 'step' : undefined}
+                className="flex min-w-28 flex-1 flex-col gap-2 md:min-w-0"
               >
-                {active ? (
-                  <span className="size-1.5 rounded-none bg-ring" />
-                ) : null}
-              </span>
-              {!isLast ? (
+                <div className="flex w-full items-center">
+                  <span
+                    className={cn(
+                      'flex size-3.5 shrink-0 items-center justify-center rounded-none border-2 transition-colors',
+                      done && 'border-primary bg-primary',
+                      active && !overdueHere && 'border-ring bg-card ring-2 ring-ring/30',
+                      overdueHere && 'border-sla-overdue bg-sla-overdue/20 ring-2 ring-sla-overdue/40',
+                      !done && !active && 'border-border bg-card',
+                    )}
+                  >
+                    {active ? (
+                      <span
+                        className={cn(
+                          'size-1.5 rounded-none',
+                          overdueHere ? 'bg-sla-overdue' : 'bg-ring',
+                        )}
+                      />
+                    ) : null}
+                  </span>
+                  {!isLast ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'h-0.5 w-full min-w-6',
+                        done ? 'bg-primary' : 'bg-border',
+                      )}
+                    />
+                  ) : null}
+                </div>
                 <span
-                  aria-hidden
                   className={cn(
-                    'w-0.5 min-h-5 grow md:h-0.5 md:min-h-0 md:w-auto',
-                    done ? 'bg-primary' : 'bg-border',
+                    'pe-2 text-xs leading-4',
+                    active
+                      ? 'font-semibold text-foreground'
+                      : done
+                        ? 'text-muted-foreground'
+                        : 'text-muted-foreground/60',
+                    overdueHere && 'text-sla-overdue',
                   )}
-                />
-              ) : null}
-            </div>
-
-            <span
-              className={cn(
-                'pb-4 text-xs leading-4 md:pb-0 md:pe-2',
-                active
-                  ? 'font-semibold text-foreground'
-                  : done
-                    ? 'text-muted-foreground'
-                    : 'text-muted-foreground/60',
-              )}
-            >
-              {stageShortLabel(locale, stage)}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+                >
+                  {stageShortLabel(locale, stage)}
+                  {overdueHere ? ` · ${t('alertOverdue')}` : ''}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={Math.max(stages.length - 1, 0)}
+        value={Math.max(currentIndex, 0)}
+        readOnly
+        aria-label={t('pipeline')}
+        className="w-full accent-[var(--ring)]"
+      />
+    </div>
   );
 }

@@ -19,11 +19,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorNote } from '@/components/ui/feedback';
 import { Modal } from '@/components/ui/modal';
-import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import {
-  listQuery,
-  useServerTableState,
-} from '@/hooks/use-server-table-state';
+  Table,
+  TableWrap,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '@/components/ui/table';
+import { listQuery, useServerTableState } from '@/hooks/use-server-table-state';
 import { useMe } from '@/hooks/use-me';
 import { useLocale } from '@/hooks/use-locale';
 import { api, apiGet, apiPost } from '@/lib/api';
@@ -80,8 +85,8 @@ function UploadButton({
   return (
     <label
       className={
-        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-none border px-2.5 text-xs font-medium uppercase tracking-wider transition-colors '
-        + (variant === 'default'
+        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-none border px-2.5 text-xs font-medium uppercase tracking-wider transition-colors ' +
+        (variant === 'default'
           ? 'border-primary bg-primary text-primary-foreground hover:bg-background hover:text-foreground'
           : 'border-border bg-card text-foreground hover:border-foreground hover:bg-foreground hover:text-background')
       }
@@ -120,10 +125,13 @@ function AdminPanel() {
   } = useServerTableState();
 
   const staffQuery = useQuery({
-    queryKey: [...queryKeys.staff, { q: debouncedSearch, page, limit }] as const,
+    queryKey: [
+      ...queryKeys.staff,
+      { q: debouncedSearch, page, limit },
+    ] as const,
     queryFn: async () => {
       const res = await apiGet<PaginatedStaff>(
-        `/api/v1/admin/staff${listQuery({ q: debouncedSearch, page, limit })}`,
+        `/api/v1/admin/staff${listQuery({ q: debouncedSearch, page, limit })}`
       );
       return {
         rows: res.data ?? [],
@@ -137,7 +145,7 @@ function AdminPanel() {
       role,
       file,
     }: {
-      role: 'tehsildars' | 'ris';
+      role: 'tehsildars' | 'ris' | 'patwaris';
       file: File;
     }) => {
       const body = new FormData();
@@ -145,7 +153,7 @@ function AdminPanel() {
       const { data } = await api.post<ApiSuccess<ImportResult>>(
         `/api/v1/admin/staff/import/${role}`,
         body,
-        { headers: { 'Content-Type': undefined } },
+        { headers: { 'Content-Type': undefined } }
       );
       return data.data;
     },
@@ -170,7 +178,7 @@ function AdminPanel() {
     setCopied(false);
     try {
       const res = await apiGet<ApiSuccess<{ email: string; password: string }>>(
-        `/api/v1/admin/staff/${userId}/password`,
+        `/api/v1/admin/staff/${userId}/password`
       );
       setPasswordModal(res.data);
     } catch (err) {
@@ -210,9 +218,7 @@ function AdminPanel() {
         }),
         columnHelper.accessor('role', {
           header: t('role'),
-          cell: ({ getValue }) => (
-            <Badge>{t(getValue() as MessageKey)}</Badge>
-          ),
+          cell: ({ getValue }) => <Badge>{t(getValue() as MessageKey)}</Badge>,
         }),
         columnHelper.display({
           id: 'actions',
@@ -244,14 +250,14 @@ function AdminPanel() {
           ),
         }),
       ]),
-    [t],
+    [t]
   );
 
   if (!me) return null;
 
   function onFile(
-    role: 'tehsildars' | 'ris',
-    event: ChangeEvent<HTMLInputElement>,
+    role: 'tehsildars' | 'ris' | 'patwaris',
+    event: ChangeEvent<HTMLInputElement>
   ) {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -326,6 +332,11 @@ function AdminPanel() {
               label={t('uploadRis')}
               variant="outline"
               onFile={(e) => onFile('ris', e)}
+            />
+            <UploadButton
+              label={t('uploadPatwaris')}
+              variant="outline"
+              onFile={(e) => onFile('patwaris', e)}
             />
           </div>
         </CardHeader>

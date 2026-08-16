@@ -13,25 +13,30 @@ function addUtcDays(from: Date, days: number): Date {
 export function computeStageDueAt(opts: {
   stage: CaseStage;
   stageChangedAt: Date;
-  hearingAt?: Date | null;
+  demarcationAt?: Date | null;
   filedAt?: Date | null;
+  reportDueAt?: Date | null;
 }): Date | null {
-  const { stage, stageChangedAt, hearingAt, filedAt } = opts;
+  const { stage, stageChangedAt, demarcationAt, filedAt, reportDueAt } = opts;
   switch (stage) {
     case 'SUBMITTED':
       return addUtcDays(filedAt ?? stageChangedAt, 5);
     case 'MEMO_ISSUED':
       return addUtcDays(stageChangedAt, 15);
-    case 'HEARING_SCHEDULED':
-      return hearingAt ? new Date(hearingAt) : addUtcDays(stageChangedAt, 7);
-    case 'OBJECTIONS_WINDOW':
-      return addUtcDays(stageChangedAt, 7);
-    case 'DEMARCATION_DONE':
-      return addUtcDays(stageChangedAt, 2);
     case 'NOTICE_ISSUED':
       return addUtcDays(stageChangedAt, 7);
+    case 'HEARING_SCHEDULED':
+      return demarcationAt
+        ? new Date(demarcationAt)
+        : addUtcDays(stageChangedAt, 7);
+    case 'DEMARCATION_WINDOW_OPEN':
+      return addUtcDays(stageChangedAt, 1);
+    case 'DEMARCATION_DONE':
+      return reportDueAt ? new Date(reportDueAt) : addUtcDays(stageChangedAt, 0);
+    case 'REPORT_SUBMITTED':
+      return addUtcDays(stageChangedAt, 7);
+    case 'OBJECTION_CLOSED':
     case 'ORDER_ISSUED':
-    case 'ECOURT_UPLOADED':
       return null;
     default:
       return null;
@@ -59,7 +64,7 @@ export function computeSlaStatus(opts: {
   guaranteeDueAt: Date;
   now?: Date;
 }): SlaStatus {
-  if (opts.stage === 'ECOURT_UPLOADED') {
+  if (opts.stage === 'ORDER_ISSUED' || opts.stage === 'OBJECTION_CLOSED') {
     return 'closed';
   }
   const days = daysToGuarantee(opts.guaranteeDueAt, opts.now ?? new Date());
@@ -102,6 +107,6 @@ export function buildSlaFields(opts: {
 export function overdueCaseMatch(now: Date = new Date()) {
   return {
     guaranteeDueAt: { $lt: now },
-    stage: { $ne: 'ECOURT_UPLOADED' as const },
+    stage: { $nin: ['ORDER_ISSUED', 'OBJECTION_CLOSED'] as const },
   };
 }

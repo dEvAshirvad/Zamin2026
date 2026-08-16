@@ -1,6 +1,6 @@
 import { model, models, Schema } from 'mongoose';
 
-import type { CaseStage } from './case.helpers';
+import type { CaseStage, GuardianType, KhasraRow, NeighborRow } from './case.helpers';
 
 import { CASE_STAGES } from './case.helpers';
 
@@ -10,26 +10,63 @@ export interface CaseDoc {
   createdByUserId: string;
   applicantName: string;
   applicantContact?: string | null;
+  applicantGuardianType?: GuardianType | null;
+  applicantGuardianName?: string | null;
+  applicantResidence?: string | null;
   village: string;
-  khasras: string[];
+  khasras: KhasraRow[];
+  totalRakba: number;
+  neighbors: NeighborRow[];
   feeAmount: number;
-  challanReference: string;
+  /** Legacy unused — kept null for old docs. */
+  challanReference?: string | null;
   filedAt: Date;
   stage: CaseStage;
   assignedRiId?: string | null;
+  assignedPatwariId?: string | null;
+  /** Legacy unused. */
   mapObjectKey?: string | null;
+  /** Legacy unused. */
   challanObjectKey?: string | null;
-  hearingAt?: Date | null;
+  noticePdfObjectKey?: string | null;
+  reportPdfObjectKey?: string | null;
+  demarcationDate?: Date | null;
+  demarcationTime?: string | null;
+  officeName?: string | null;
+  district?: string | null;
+  state?: string | null;
+  patwariHalkaNumber?: string | null;
+  tehsildarName?: string | null;
+  tehsildarOrderDate?: Date | null;
+  issueDate?: Date | null;
   stageChangedAt?: Date | null;
   stageDueAt?: Date | null;
+  reportDueAt?: Date | null;
   lastTransitionNote?: string | null;
+  objectionReason?: string | null;
   guaranteeDueAt: Date;
-  ecourtUploaded: boolean;
+  ecourtUploaded?: boolean;
   ecourtReference?: string | null;
   deletedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const khasraSchema = new Schema<KhasraRow>(
+  {
+    khasraNumber: { type: String, required: true, trim: true },
+    rakba: { type: Number, required: true, min: 0 },
+  },
+  { _id: false },
+);
+
+const neighborSchema = new Schema<NeighborRow>(
+  {
+    ownerName: { type: String, required: true, trim: true },
+    address: { type: String, required: true, trim: true },
+  },
+  { _id: false },
+);
 
 const caseSchema = new Schema<CaseDoc>(
   {
@@ -38,10 +75,19 @@ const caseSchema = new Schema<CaseDoc>(
     createdByUserId: { type: String, required: true, index: true },
     applicantName: { type: String, required: true, trim: true },
     applicantContact: { type: String, default: null, trim: true },
+    applicantGuardianType: {
+      type: String,
+      enum: ['पिता', 'पति', null],
+      default: null,
+    },
+    applicantGuardianName: { type: String, default: null, trim: true },
+    applicantResidence: { type: String, default: null, trim: true },
     village: { type: String, required: true, trim: true },
-    khasras: { type: [String], required: true },
+    khasras: { type: [khasraSchema], required: true },
+    totalRakba: { type: Number, required: true, min: 0 },
+    neighbors: { type: [neighborSchema], default: [] },
     feeAmount: { type: Number, required: true, min: 0 },
-    challanReference: { type: String, required: true, trim: true },
+    challanReference: { type: String, default: null, trim: true },
     filedAt: { type: Date, required: true },
     stage: {
       type: String,
@@ -51,12 +97,25 @@ const caseSchema = new Schema<CaseDoc>(
       index: true,
     },
     assignedRiId: { type: String, default: null, index: true },
+    assignedPatwariId: { type: String, default: null, index: true },
     mapObjectKey: { type: String, default: null },
     challanObjectKey: { type: String, default: null },
-    hearingAt: { type: Date, default: null },
+    noticePdfObjectKey: { type: String, default: null },
+    reportPdfObjectKey: { type: String, default: null },
+    demarcationDate: { type: Date, default: null, index: true },
+    demarcationTime: { type: String, default: '12:00' },
+    officeName: { type: String, default: null, trim: true },
+    district: { type: String, default: 'रायपुर', trim: true },
+    state: { type: String, default: 'छत्तीसगढ़', trim: true },
+    patwariHalkaNumber: { type: String, default: null, trim: true },
+    tehsildarName: { type: String, default: null, trim: true },
+    tehsildarOrderDate: { type: Date, default: null },
+    issueDate: { type: Date, default: null },
     stageChangedAt: { type: Date, default: null },
     stageDueAt: { type: Date, default: null, index: true },
+    reportDueAt: { type: Date, default: null, index: true },
     lastTransitionNote: { type: String, default: null, trim: true },
+    objectionReason: { type: String, default: null, trim: true },
     guaranteeDueAt: { type: Date, required: true, index: true },
     ecourtUploaded: { type: Boolean, default: false },
     ecourtReference: { type: String, default: null, trim: true },

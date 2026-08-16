@@ -48,6 +48,13 @@ const NAV: NavItem[] = [
     prefix: true,
   },
   {
+    href: '/patwari',
+    labelKey: 'navCases',
+    icon: ListIcon,
+    roles: ['patwari'],
+    prefix: true,
+  },
+  {
     href: '/admin',
     labelKey: 'navStaff',
     icon: UsersThreeIcon,

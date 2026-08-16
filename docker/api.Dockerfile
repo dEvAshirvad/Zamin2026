@@ -47,6 +47,8 @@ COPY --from=prod-deps /out/package.json ./
 COPY --from=builder /app/api/dist ./dist
 # serverConfig reads public/logo.svg at import time
 COPY --from=builder /app/api/public ./public
+# Devanagari font for Suchna / report PDFs
+COPY --from=builder /app/api/assets ./assets
 
 RUN mkdir -p /app/logs /app/uploads/temp /app/uploads/persist \
   && chown -R api:nodejs /app

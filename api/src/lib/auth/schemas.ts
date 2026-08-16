@@ -7,7 +7,7 @@ import type { BetterAuthOptions } from 'better-auth/types';
 const user = {
   additionalFields: {
     role: {
-      type: ['admin', 'tehsildar', 'ri'],
+      type: ['admin', 'tehsildar', 'ri', 'patwari'],
       required: false,
       input: false,
       defaultValue: 'ri',

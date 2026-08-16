@@ -70,6 +70,7 @@ function AdminCases() {
           limit,
           q: debouncedSearch,
           overdue: filters.overdueOnly || undefined,
+          alert: filters.alertOverdue ? 'OVERDUE' : undefined,
           stage: filters.stage || undefined,
           tehsilId: filters.tehsilId || undefined,
         })}`,

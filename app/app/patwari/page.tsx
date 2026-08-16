@@ -21,7 +21,7 @@ import { apiGet } from '@/lib/api';
 import type { PaginatedCases } from '@/lib/cases';
 import { queryKeys } from '@/lib/query-keys';
 
-function RiHome() {
+function PatwariHome() {
   const { data: me } = useMe();
   const { t } = useLocale();
   const [filters, setFilters] = useState<CaseListFilterValues>({
@@ -35,7 +35,7 @@ function RiHome() {
   const casesQuery = useQuery({
     queryKey: [
       ...queryKeys.cases,
-      'ri',
+      'patwari',
       { ...filters, q: debouncedSearch },
     ] as const,
     queryFn: async () => {
@@ -88,7 +88,7 @@ function RiHome() {
       ) : (
         <CaseTable
           cases={cases}
-          detailBase="/ri/cases"
+          detailBase="/patwari/cases"
           overdueOnly={filters.overdueOnly}
         />
       )}
@@ -97,10 +97,10 @@ function RiHome() {
   );
 }
 
-export default function RiPage() {
+export default function PatwariPage() {
   return (
-    <RoleGate allow={['ri']}>
-      <RiHome />
+    <RoleGate allow={['patwari']}>
+      <PatwariHome />
     </RoleGate>
   );
 }

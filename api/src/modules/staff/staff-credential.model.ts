@@ -20,7 +20,7 @@ const staffCredentialSchema = new Schema<StaffCredentialDoc>(
     userId: { type: String, required: true, unique: true, index: true },
     email: { type: String, required: true, index: true },
     name: { type: String, required: true },
-    role: { type: String, required: true, enum: ['admin', 'tehsildar', 'ri'] },
+    role: { type: String, required: true, enum: ['admin', 'tehsildar', 'ri', 'patwari'] },
     tehsilId: { type: String, default: null },
     passwordPlain: { type: String, required: true },
     importBatchId: { type: String, required: true, index: true },

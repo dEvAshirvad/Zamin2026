@@ -129,6 +129,36 @@ router.post(
 
 /**
  * @openapi
+ * /api/v1/admin/staff/import/patwaris:
+ *   post:
+ *     tags: [Staff]
+ *     summary: Import Patwaris from CSV/XLSX
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: Import result
+ */
+router.post(
+  '/import/patwaris',
+  ...adminOnly,
+  upload.middleware.single('file'),
+  importHandler('patwari'),
+);
+
+/**
+ * @openapi
  * /api/v1/admin/staff:
  *   get:
  *     tags: [Staff]
@@ -140,7 +170,7 @@ router.post(
  *         name: role
  *         schema:
  *           type: string
- *           enum: [admin, tehsildar, ri]
+ *           enum: [admin, tehsildar, ri, patwari]
  *       - in: query
  *         name: tehsilId
  *         schema:
@@ -167,7 +197,7 @@ router.get('/', ...adminOnly, async (req, res, next) => {
       = typeof req.query.tehsilId === 'string' ? req.query.tehsilId : undefined;
     const q = typeof req.query.q === 'string' ? req.query.q : undefined;
     const staff = await listStaff({
-      role: role as 'admin' | 'tehsildar' | 'ri' | undefined,
+      role: role as 'admin' | 'tehsildar' | 'ri' | 'patwari' | undefined,
       tehsilId,
       q,
       pagination: parsePagination(req),

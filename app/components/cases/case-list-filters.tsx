@@ -16,7 +16,8 @@ const RI_STAGE_OPTIONS = [
   'MEMO_ISSUED',
   'NOTICE_ISSUED',
   'HEARING_SCHEDULED',
-  'OBJECTIONS_WINDOW',
+  'DEMARCATION_WINDOW_OPEN',
+  'DEMARCATION_DONE',
 ] as const;
 
 export type TehsilOption = { id: string; name: string };
@@ -25,6 +26,7 @@ export type CaseListFilterValues = {
   stage: string;
   overdueOnly: boolean;
   tehsilId: string;
+  alertOverdue?: boolean;
 };
 
 /** Shared cache: always an array (never Map) under `['tehsils']`. */
@@ -82,7 +84,10 @@ export function CaseListFilters({
   const tehsilsQuery = useTehsils(showTehsil);
 
   const dirty =
-    Boolean(value.stage) || value.overdueOnly || Boolean(value.tehsilId);
+    Boolean(value.stage)
+    || value.overdueOnly
+    || Boolean(value.tehsilId)
+    || Boolean(value.alertOverdue);
 
   return (
     <div className={cn('flex flex-wrap items-end gap-3', className)}>
@@ -129,12 +134,26 @@ export function CaseListFilters({
         {t('overdueOnly')}
       </ToggleChip>
 
+      <ToggleChip
+        pressed={Boolean(value.alertOverdue)}
+        onPressedChange={(pressed) =>
+          onChange({ ...value, alertOverdue: pressed })
+        }
+      >
+        {t('filterAlertOverdue')}
+      </ToggleChip>
+
       {dirty ? (
         <button
           type="button"
           className="text-xs tracking-wider text-muted-foreground uppercase underline-offset-2 hover:text-foreground hover:underline"
           onClick={() =>
-            onChange({ stage: '', overdueOnly: false, tehsilId: '' })
+            onChange({
+              stage: '',
+              overdueOnly: false,
+              tehsilId: '',
+              alertOverdue: false,
+            })
           }
         >
           {t('clearFilters')}

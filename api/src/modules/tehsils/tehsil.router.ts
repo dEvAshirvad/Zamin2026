@@ -2,7 +2,7 @@ import { createRouter } from '@/configs/serverConfig';
 import Respond from '@/lib/respond';
 import { requireAuth } from '@/middleware/require-auth';
 import { requireRole } from '@/middleware/require-role';
-import { listRisInMyTehsil } from '@/modules/cases/case.service';
+import { listPatwarisInMyTehsil, listRisInMyTehsil } from '@/modules/cases/case.service';
 
 import { listTehsils } from './tehsil.service';
 
@@ -30,26 +30,29 @@ router.get('/', requireAuth, requireRole('admin'), async (_req, res, next) => {
   }
 });
 
-/**
- * @openapi
- * /api/v1/tehsils/me/ris:
- *   get:
- *     tags: [Tehsils]
- *     summary: List RIs in the caller's tehsil
- *     security:
- *       - cookieAuth: []
- *     responses:
- *       200:
- *         description: RI list for picker
- */
 router.get(
   '/me/ris',
   requireAuth,
-  requireRole('tehsildar', 'ri'),
+  requireRole('tehsildar', 'ri', 'patwari'),
   async (req, res, next) => {
     try {
       const ris = await listRisInMyTehsil(req.user!);
       return Respond(res, ris);
+    }
+    catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/me/patwaris',
+  requireAuth,
+  requireRole('tehsildar', 'ri', 'patwari'),
+  async (req, res, next) => {
+    try {
+      const patwaris = await listPatwarisInMyTehsil(req.user!);
+      return Respond(res, patwaris);
     }
     catch (error) {
       return next(error);

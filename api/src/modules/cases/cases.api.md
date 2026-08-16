@@ -1,94 +1,47 @@
-# Cases module
+# Cases API — Suchna Patra pipeline
 
-सर सीमांकन case intake + stage workflow through `ECOURT_UPLOADED` (Phase 4 SLA + eCourt).
-
-Auth: Better Auth session cookie. Tehsil-scoped for tehsildar; admin sees all. RI sees only cases **assigned to them** while stage is in RI-active work (`MEMO_ISSUED` … `OBJECTIONS_WINDOW`). After `DEMARCATION_DONE`, the case leaves the RI list (tehsildar owns order/eCourt). Admin may only transition `ORDER_ISSUED` → `ECOURT_UPLOADED`.
+Auth: Better Auth session cookie. Tehsil-scoped for tehsildar; admin sees all. RI/Patwari see cases **assigned to them** while in active field stages.
 
 ## Stages
 
-`SUBMITTED` → `MEMO_ISSUED` (tehsildar, assigns RI) → `HEARING_SCHEDULED` (assigned RI, requires `hearingAt`) → optional `OBJECTIONS_WINDOW` → `DEMARCATION_DONE` (RI) → `ORDER_ISSUED` (tehsildar) → `ECOURT_UPLOADED` (tehsildar or admin).
-
-`NOTICE_ISSUED` exists in the enum for filters; UX uses one jump `MEMO_ISSUED` → `HEARING_SCHEDULED`.
-
-## SLA fields (list + detail)
-
-| Field | Meaning |
-|-------|---------|
-| `guaranteeDueAt` | `filedAt + 30d` (Lok Seva) |
-| `slaStatus` | `closed` \| `overdue` \| `on_track` |
-| `daysToGuarantee` | Days left (negative if overdue) |
-| `stageDueAt` | Soft stage budget (display only) |
-| `stageSlaStatus` | `none` \| `on_track` \| `overdue` |
-| `ecourtReference` | Optional string when marked uploaded |
-
-Overdue: `now > guaranteeDueAt` and stage ≠ `ECOURT_UPLOADED`. Closed eCourt → `slaStatus=closed`.
-
-## Soft stage budgets (set on enter)
-
-| Stage | `stageDueAt` |
-|-------|--------------|
-| `SUBMITTED` | `filedAt + 5d` |
-| `MEMO_ISSUED` | `stageChangedAt + 15d` |
-| `HEARING_SCHEDULED` | `hearingAt` or `+7d` |
-| `OBJECTIONS_WINDOW` | `+7d` |
-| `DEMARCATION_DONE` | `+2d` |
-| `ORDER_ISSUED` / `ECOURT_UPLOADED` | `null` |
-
-## API map
-
-| Method | URL | Access | Description |
-|--------|-----|--------|-------------|
-| POST | `/api/v1/cases` | tehsildar | Create case; optional map/challan files |
-| GET | `/api/v1/cases` | admin, tehsildar, ri | List; `stage`, `overdue=true`, `tehsilId` (admin), `q`, `page`, `limit` (default 20). Each row includes `assignedRiName`. RI: assigned + active stages only |
-| GET | `/api/v1/cases/:id` | admin, tehsildar, assigned RI (active) | Detail + download URLs + `allowedNext` |
-| GET | `/api/v1/cases/:id/transitions` | staff with case access (same RI rules) | Transition audit timeline |
-| POST | `/api/v1/cases/:id/transitions` | tehsildar, assigned RI, admin (eCourt only) | Advance stage (writes audit row) |
-| PATCH | `/api/v1/cases/:id/documents` | tehsildar | Add/replace map and/or challan |
-| GET | `/api/v1/tehsils/me/ris` | tehsildar, ri | RIs in caller tehsil (memo picker) |
-| GET | `/api/v1/admin/audit/transitions` | admin | Paginated global transition log |
-| GET | `/api/v1/admin/metrics/cases` | admin | Totals, by stage, by tehsil |
-
-## POST `/api/v1/cases`
-
-Multipart: `applicantName`, `village`, `khasras`, `challanReference` required; optional contact, filedAt, map, challan.
-
-`feeAmount` = `50 * khasras.length`. `stage` = `SUBMITTED`. Sets `stageDueAt` (memo budget).
-
-## GET `/api/v1/cases?overdue=true`
-
-Returns cases with `guaranteeDueAt < now` and `stage != ECOURT_UPLOADED` (still tehsil-scoped for staff).
-
-Optional `q` searches `caseNo`, `applicantName`, `village`, `challanReference` (case-insensitive). Pagination defaults: `page=1`, `limit=20` (max 100).
-
-## POST `/api/v1/cases/:id/transitions`
-
-```json
-{
-  "toStage": "ECOURT_UPLOADED",
-  "assignedRiId": "optional-ri-user-id",
-  "hearingAt": "2026-09-01T10:00:00.000Z",
-  "ecourtReference": "optional-ref",
-  "note": "optional"
-}
+```
+SUBMITTED → MEMO_ISSUED → HEARING_SCHEDULED
+  ├─ OBJECTION_CLOSED (terminal; reason required)
+  └─ DEMARCATION_WINDOW_OPEN → DEMARCATION_DONE → REPORT_SUBMITTED → ORDER_ISSUED (terminal)
 ```
 
-- Memo: omit `assignedRiId` → auto least-loaded RI; 0 RIs → `NO_RI_IN_TEHSIL`.
-- Notice (`HEARING_SCHEDULED`): `hearingAt` required.
-- eCourt: sets `ecourtUploaded=true`, optional `ecourtReference`, clears `stageDueAt`.
-- Admin may only post `toStage=ECOURT_UPLOADED`; other stages → `ACCESS_DENIED`.
-- Wrong RI → `ACCESS_DENIED`. Illegal edge → `INVALID_TRANSITION`.
+`NOTICE_ISSUED` is legacy-only (drains → `HEARING_SCHEDULED`). Notice PDF is generated on `HEARING_SCHEDULED`; `hearingAt` is auto-set from intake `demarcationDate` + `demarcationTime`.
 
-Response includes updated case + SLA fields + `allowedNext`.
+Reschedule from `HEARING_SCHEDULED` via `POST /:id/reschedule` with `demarcationDate` + `demarcationTime` + `reason`; regenerates a **पुनर्निर्धारण** notice PDF (previous vs new schedule + reason).
 
-## GET `/api/v1/cases/:id`
+**OVERDUE alert:** `stage === DEMARCATION_DONE` and `now > reportDueAt` → `alertStatus: 'OVERDUE'`. Filter: `?alert=OVERDUE`.
 
-Includes hearing/stage/SLA fields, `ecourtReference`, `allowedNext` (admin gets eCourt only when `ORDER_ISSUED`), and `assignedRiName` (resolved display name for `assignedRiId`, or `null`).
+## Create (tehsildar)
 
-## Frontend notes
+`POST /api/v1/cases` JSON body — Suchna fields: applicant + guardian, khasras`[{khasraNumber,rakba}]`, neighbors`[{ownerName,address}]`, demarcationDate/time, patwariHalkaNumber, office defaults. No challan/map required. Fee = ₹50 × khasra count. `demarcationDate` must be after `filedAt`.
 
-1. Invalidate `['cases']` and `['cases', id]` after transitions (and transition history).
-2. Tehsildar: memo, order, eCourt.
-3. Assigned RI: notice, objections, demarcation.
-4. Admin: eCourt only when order issued; metrics at `/admin/metrics`; audit at `/admin/audit`.
-5. Lists: overdue badge + optional “Overdue only” filter.
-6. Locale: HI/EN toggle (`localStorage` `pz-locale`, default `hi`).
+## List
+
+`GET /api/v1/cases` — `stage`, `overdue`, `alert=OVERDUE`, `tehsilId` (admin), `q`, pagination. Rows include `assignedRiName`, `assignedPatwariName`, `alertStatus`.
+
+## Transitions
+
+`POST /api/v1/cases/:id/transitions` — JSON or multipart (`report` file for `REPORT_SUBMITTED`).
+
+| toStage | Actor | Extra |
+|---------|--------|--------|
+| MEMO_ISSUED | tehsildar | `assignedRiId` + `assignedPatwariId` required |
+| HEARING_SCHEDULED | RI/Patwari | auto hearingAt from demarcation; generates notice PDF |
+| OBJECTION_CLOSED | RI/Patwari | objectionReason |
+| DEMARCATION_WINDOW_OPEN | RI/Patwari | only on demarcationDate |
+| DEMARCATION_DONE | RI/Patwari | sets reportDueAt = now+12h |
+| REPORT_SUBMITTED | RI/Patwari | report PDF file |
+| ORDER_ISSUED | tehsildar | |
+
+Also: `POST /:id/reschedule`, `POST /:id/notice-pdf`.
+
+Staff pickers: `GET /api/v1/tehsils/me/ris`, `GET /api/v1/tehsils/me/patwaris`.
+
+## Legacy
+
+Old stages (`OBJECTIONS_WINDOW`, `ECOURT_UPLOADED`, string khasras) may exist in DB. Prefer one-shot remap: eCourt → ORDER_ISSUED; objections window → HEARING_SCHEDULED; string khasras → `{khasraNumber, rakba:0}` before save. New writes use the enum above only.
