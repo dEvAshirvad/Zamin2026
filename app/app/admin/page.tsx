@@ -6,6 +6,8 @@ import {
   ArrowClockwiseIcon,
   DownloadSimpleIcon,
   EyeIcon,
+  PlusIcon,
+  TrashIcon,
   UploadSimpleIcon,
 } from '@phosphor-icons/react';
 import { createColumnHelper } from '@tanstack/react-table';
@@ -18,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorNote } from '@/components/ui/feedback';
+import { Field, Input, Select } from '@/components/ui/field';
 import { Modal } from '@/components/ui/modal';
 import {
   Table,
@@ -31,7 +34,7 @@ import {
 import { listQuery, useServerTableState } from '@/hooks/use-server-table-state';
 import { useMe } from '@/hooks/use-me';
 import { useLocale } from '@/hooks/use-locale';
-import { api, apiGet, apiPost } from '@/lib/api';
+import { api, apiDelete, apiGet, apiPost } from '@/lib/api';
 import type { MessageKey } from '@/lib/i18n';
 import type { PaginationMeta } from '@/lib/page-size';
 import { queryKeys } from '@/lib/query-keys';
@@ -59,6 +62,16 @@ interface ImportResult {
   }>;
 }
 
+interface CreatedStaff {
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  tehsilId: string;
+  password: string;
+  warnings: string[];
+}
+
 interface ApiSuccess<T> {
   success: boolean;
   data: T;
@@ -70,7 +83,13 @@ interface PaginatedStaff {
   meta?: { pagination: PaginationMeta };
 }
 
+type StaffCreateRole = 'tehsildar' | 'ri' | 'patwari';
+
 const columnHelper = createColumnHelper<DataTableFeatures, StaffRow>();
+
+function isDeletableStaff(role: string) {
+  return role === 'tehsildar' || role === 'ri' || role === 'patwari';
+}
 
 /** File pickers styled as buttons — the native control can't be. */
 function UploadButton({
@@ -112,6 +131,14 @@ function AdminPanel() {
     email: string;
     password: string;
   } | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: '',
+    email: '',
+    role: 'tehsildar' as StaffCreateRole,
+    tehsil: '',
+  });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const {
@@ -167,6 +194,44 @@ function AdminPanel() {
     },
   });
 
+  const createMutation = useMutation({
+    mutationFn: async (body: typeof addForm) => {
+      const res = await apiPost<ApiSuccess<CreatedStaff>>(
+        '/api/v1/admin/staff',
+        body
+      );
+      return res.data;
+    },
+    onSuccess: (created) => {
+      setAddOpen(false);
+      setAddForm({ name: '', email: '', role: 'tehsildar', tehsil: '' });
+      setError(null);
+      setCopied(false);
+      setPasswordModal({ email: created.email, password: created.password });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.staff });
+    },
+    onError: (err: { friendlyMessage?: string }) => {
+      setError(err.friendlyMessage ?? t('importFailed'));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (userIds: string[]) => {
+      const res = await apiDelete<
+        ApiSuccess<{ deleted: number; skipped: unknown[] }>
+      >('/api/v1/admin/staff', { userIds });
+      return res.data;
+    },
+    onSuccess: () => {
+      setSelectedIds(new Set());
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.staff });
+    },
+    onError: (err: { friendlyMessage?: string }) => {
+      setError(err.friendlyMessage ?? t('deleteStaffFailed'));
+    },
+  });
+
   function failMessage(err: unknown, fallback: MessageKey) {
     return err && typeof err === 'object' && 'friendlyMessage' in err
       ? String((err as { friendlyMessage?: string }).friendlyMessage)
@@ -199,9 +264,68 @@ function AdminPanel() {
     }
   }
 
+  function toggleSelected(id: string, role: string) {
+    if (!isDeletableStaff(role)) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllOnPage(rows: StaffRow[]) {
+    const deletable = rows.filter((r) => isDeletableStaff(r.role));
+    const allSelected =
+      deletable.length > 0 && deletable.every((r) => selectedIds.has(r.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const r of deletable) next.delete(r.id);
+      } else {
+        for (const r of deletable) next.add(r.id);
+      }
+      return next;
+    });
+  }
+
+  const rows = staffQuery.data?.rows ?? [];
+  const meta = staffQuery.data?.pagination;
+  const pageDeletable = rows.filter((r) => isDeletableStaff(r.role));
+  const allPageSelected =
+    pageDeletable.length > 0 &&
+    pageDeletable.every((r) => selectedIds.has(r.id));
+
   const columns = useMemo(
     () =>
       columnHelper.columns([
+        columnHelper.display({
+          id: 'select',
+          header: () => (
+            <input
+              type="checkbox"
+              aria-label={t('selectStaff')}
+              checked={allPageSelected}
+              disabled={pageDeletable.length === 0}
+              onChange={() => toggleAllOnPage(rows)}
+            />
+          ),
+          cell: ({ row }) => {
+            const deletable = isDeletableStaff(row.original.role);
+            return (
+              <input
+                type="checkbox"
+                aria-label={t('selectStaff')}
+                disabled={!deletable}
+                checked={selectedIds.has(row.original.id)}
+                onChange={() =>
+                  toggleSelected(row.original.id, row.original.role)
+                }
+                onClick={(e) => e.stopPropagation()}
+              />
+            );
+          },
+        }),
         columnHelper.accessor('name', {
           header: t('name'),
           cell: ({ getValue }) => (
@@ -250,7 +374,8 @@ function AdminPanel() {
           ),
         }),
       ]),
-    [t]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selection + page rows drive checkbox column
+    [t, selectedIds, allPageSelected, rows, pageDeletable.length]
   );
 
   if (!me) return null;
@@ -265,16 +390,14 @@ function AdminPanel() {
     importMutation.mutate({ role, file });
   }
 
-  async function downloadCredentials() {
+  async function downloadBlob(path: string, filename: string) {
     setError(null);
     try {
-      const res = await api.get('/api/v1/admin/staff/credentials.csv', {
-        responseType: 'blob',
-      });
+      const res = await api.get(path, { responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'staff-credentials.csv';
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -282,21 +405,16 @@ function AdminPanel() {
     }
   }
 
-  function downloadTemplate() {
-    const csv =
-      'name,email,tehsil\n' +
-      'Example Tehsildar,tehsildar.example@district.gov,Raipur\n';
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'staff-import-template.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+  function onDeleteSelected() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(t('deleteStaffConfirm', { n: ids.length }))
+    ) {
+      return;
+    }
+    deleteMutation.mutate(ids);
   }
-
-  const rows = staffQuery.data?.rows ?? [];
-  const meta = staffQuery.data?.pagination;
 
   return (
     <AppShell
@@ -309,7 +427,16 @@ function AdminPanel() {
             {t('inviteEmails')}:{' '}
             {me.inviteEmailEnabled ? t('inviteOn') : t('inviteOff')}
           </Badge>
-          <Button type="button" variant="outline" onPress={downloadCredentials}>
+          <Button
+            type="button"
+            variant="outline"
+            onPress={() =>
+              downloadBlob(
+                '/api/v1/admin/staff/credentials.csv',
+                'staff-credentials.csv'
+              )
+            }
+          >
             <DownloadSimpleIcon size={14} />
             {t('downloadPasswords')}
           </Button>
@@ -320,9 +447,35 @@ function AdminPanel() {
         <CardHeader>
           <CardTitle>{t('importStaff')}</CardTitle>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onPress={downloadTemplate}>
+            <Button
+              type="button"
+              variant="outline"
+              onPress={() =>
+                downloadBlob(
+                  '/api/v1/admin/staff/import-template.csv',
+                  'staff-import-template.csv'
+                )
+              }
+            >
               <DownloadSimpleIcon size={14} />
               {t('downloadTemplate')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onPress={() =>
+                downloadBlob(
+                  '/api/v1/admin/staff/import-template.xlsx',
+                  'staff-import-template.xlsx'
+                )
+              }
+            >
+              <DownloadSimpleIcon size={14} />
+              {t('downloadTemplateXlsx')}
+            </Button>
+            <Button type="button" onPress={() => setAddOpen(true)}>
+              <PlusIcon size={14} />
+              {t('addStaff')}
             </Button>
             <UploadButton
               label={t('uploadTehsildars')}
@@ -406,7 +559,19 @@ function AdminPanel() {
       ) : null}
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-semibold text-xl tracking-tight">{t('staff')}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-xl tracking-tight">{t('staff')}</h2>
+          <Button
+            type="button"
+            variant="outline"
+            isDisabled={selectedIds.size === 0 || deleteMutation.isPending}
+            onPress={onDeleteSelected}
+          >
+            <TrashIcon size={14} />
+            {t('deleteSelected')}
+            {selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+          </Button>
+        </div>
         <DataTable
           columns={columns}
           data={rows}
@@ -422,6 +587,83 @@ function AdminPanel() {
           emptyDescription={t('noStaffHint')}
         />
       </section>
+
+      <Modal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title={t('addStaffTitle')}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              onPress={() => setAddOpen(false)}
+            >
+              {t('close')}
+            </Button>
+            <Button
+              type="button"
+              isDisabled={
+                createMutation.isPending ||
+                !addForm.name.trim() ||
+                !addForm.email.trim() ||
+                !addForm.tehsil.trim()
+              }
+              onPress={() => createMutation.mutate(addForm)}
+            >
+              {createMutation.isPending
+                ? t('creatingStaff')
+                : t('addStaffSubmit')}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Field label={t('name')}>
+            <Input
+              value={addForm.name}
+              onChange={(e) =>
+                setAddForm((f) => ({ ...f, name: e.target.value }))
+              }
+              autoComplete="off"
+            />
+          </Field>
+          <Field label={t('email')}>
+            <Input
+              type="email"
+              value={addForm.email}
+              onChange={(e) =>
+                setAddForm((f) => ({ ...f, email: e.target.value }))
+              }
+              autoComplete="off"
+            />
+          </Field>
+          <Field label={t('role')}>
+            <Select
+              value={addForm.role}
+              onChange={(e) =>
+                setAddForm((f) => ({
+                  ...f,
+                  role: e.target.value as StaffCreateRole,
+                }))
+              }
+            >
+              <option value="tehsildar">{t('tehsildar')}</option>
+              <option value="ri">{t('ri')}</option>
+              <option value="patwari">{t('patwari')}</option>
+            </Select>
+          </Field>
+          <Field label={t('tehsilName')}>
+            <Input
+              value={addForm.tehsil}
+              onChange={(e) =>
+                setAddForm((f) => ({ ...f, tehsil: e.target.value }))
+              }
+              autoComplete="off"
+            />
+          </Field>
+        </div>
+      </Modal>
 
       <Modal
         open={passwordModal !== null}

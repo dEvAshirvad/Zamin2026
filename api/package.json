@@ -22,7 +22,8 @@
     "clean:find-unused": "knip",
     "lint": "eslint \"src/**/*.ts\"",
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "clear-cases": "tsx scripts/clear-cases.ts"
   },
   "keywords": [],
   "author": "",

@@ -280,3 +280,189 @@ export async function resetStaffPassword(userId: string) {
 
   return { userId, email, name, role, password: passwordPlain };
 }
+
+/** Create one tehsildar / RI / patwari (admin only). */
+export async function createOneStaff(input: {
+  name: string;
+  email: string;
+  role: StaffImportRole;
+  tehsil: string;
+}) {
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const tehsilName = input.tehsil.trim();
+  if (!name || !email || !tehsilName) {
+    throw new APIError({
+      STATUS: HttpErrorStatusCode.BAD_REQUEST,
+      CODE: 'VALIDATION_FAILED',
+      TITLE: 'VALIDATION_FAILED',
+      MESSAGE: 'name, email, and tehsil are required',
+    });
+  }
+  if (!email.includes('@')) {
+    throw new APIError({
+      STATUS: HttpErrorStatusCode.BAD_REQUEST,
+      CODE: 'VALIDATION_FAILED',
+      TITLE: 'VALIDATION_FAILED',
+      MESSAGE: 'invalid email',
+    });
+  }
+  if (!['tehsildar', 'ri', 'patwari'].includes(input.role)) {
+    throw new APIError({
+      STATUS: HttpErrorStatusCode.BAD_REQUEST,
+      CODE: 'VALIDATION_FAILED',
+      TITLE: 'VALIDATION_FAILED',
+      MESSAGE: 'role must be tehsildar, ri, or patwari',
+    });
+  }
+
+  const existing = await findUserByEmail(email);
+  if (existing) {
+    throw new APIError({
+      STATUS: HttpErrorStatusCode.CONFLICT,
+      CODE: 'EMAIL_EXISTS',
+      TITLE: 'EMAIL_EXISTS',
+      MESSAGE: 'email already registered',
+    });
+  }
+
+  const tehsil = await resolveOrCreateByName(tehsilName);
+  const tehsilId = String(tehsil._id);
+  const batchId = randomUUID();
+  const user = await createStaffUser({
+    name,
+    email,
+    role: input.role,
+    tehsilId,
+  });
+
+  await StaffCredentialModel.findOneAndUpdate(
+    { userId: user.userId },
+    {
+      userId: user.userId,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      tehsilId: user.tehsilId,
+      passwordPlain: user.passwordPlain,
+      importBatchId: batchId,
+    },
+    { upsert: true, new: true },
+  );
+
+  await maybeSendInvite({
+    name: user.name,
+    email: user.email,
+    password: user.passwordPlain,
+    role: user.role,
+  });
+
+  const warnings: string[] = [];
+  if (input.role === 'tehsildar' && config.staff.warnMultipleTehsildar) {
+    const count = await countTehsildarsInTehsil(tehsilId);
+    if (count > 1) {
+      warnings.push(
+        `Tehsil "${tehsil.name}" now has ${count} tehsildars (suggested: one)`,
+      );
+    }
+  }
+
+  return {
+    userId: user.userId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    tehsilId,
+    password: user.passwordPlain,
+    warnings,
+  };
+}
+
+/**
+ * Delete staff users by id. Never deletes admins.
+ * Also removes credential accounts, sessions, and stored temp passwords.
+ */
+export async function deleteStaffUsers(userIds: string[]) {
+  const ids = [...new Set(userIds.map(id => id.trim()).filter(Boolean))];
+  if (ids.length === 0) {
+    throw new APIError({
+      STATUS: HttpErrorStatusCode.BAD_REQUEST,
+      CODE: 'VALIDATION_FAILED',
+      TITLE: 'VALIDATION_FAILED',
+      MESSAGE: 'userIds is required',
+    });
+  }
+
+  const col = db.collection('user');
+  const idFilter = ids as unknown as import('mongodb').ObjectId[];
+  const users = await col
+    .find({
+      $or: [
+        { _id: { $in: idFilter } },
+        { id: { $in: ids } },
+      ],
+    })
+    .project({ _id: 1, id: 1, role: 1, email: 1 })
+    .toArray();
+
+  const deletable: string[] = [];
+  const skipped: Array<{ userId: string; reason: string }> = [];
+  const foundIds = new Set(users.map(u => userDocId(u)));
+
+  for (const id of ids) {
+    if (!foundIds.has(id)) {
+      skipped.push({ userId: id, reason: 'not found' });
+    }
+  }
+
+  for (const u of users) {
+    const id = userDocId(u);
+    if (u.role === 'admin') {
+      skipped.push({ userId: id, reason: 'cannot delete admin' });
+      continue;
+    }
+    if (!['tehsildar', 'ri', 'patwari'].includes(String(u.role))) {
+      skipped.push({ userId: id, reason: 'not deletable staff role' });
+      continue;
+    }
+    deletable.push(id);
+  }
+
+  if (deletable.length > 0) {
+    const deletableFilter = deletable as unknown as import('mongodb').ObjectId[];
+    await Promise.all([
+      col.deleteMany({
+        $or: [
+          { _id: { $in: deletableFilter } },
+          { id: { $in: deletable } },
+        ],
+      }),
+      db.collection('account').deleteMany({ userId: { $in: deletable } }),
+      db.collection('session').deleteMany({ userId: { $in: deletable } }),
+      StaffCredentialModel.deleteMany({ userId: { $in: deletable } }),
+    ]);
+  }
+
+  return {
+    deleted: deletable.length,
+    deletedIds: deletable,
+    skipped,
+  };
+}
+
+/** XLSX import template (name, email, tehsil + example row). */
+export async function staffImportTemplateXlsx(): Promise<Buffer> {
+  const ExcelJS = (await import('exceljs')).default;
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Staff');
+  sheet.addRow(['name', 'email', 'tehsil']);
+  sheet.addRow([
+    'Example Tehsildar',
+    'tehsildar.example@district.gov',
+    'Raipur',
+  ]);
+  sheet.getRow(1).font = { bold: true };
+  sheet.columns = [{ width: 24 }, { width: 36 }, { width: 18 }];
+  const buf = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buf);
+}

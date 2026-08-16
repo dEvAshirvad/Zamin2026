@@ -12,11 +12,14 @@ import { HttpErrorStatusCode } from '@/types/errors/errors.types';
 import type { StaffImportRole } from './staff.service';
 
 import {
+  createOneStaff,
   credentialsCsv,
+  deleteStaffUsers,
   importStaffFromFile,
   listStaff,
   resetStaffPassword,
   revealPassword,
+  staffImportTemplateXlsx,
 } from './staff.service';
 
 const router = createRouter();
@@ -156,6 +159,88 @@ router.post(
   upload.middleware.single('file'),
   importHandler('patwari'),
 );
+
+router.get('/import-template.xlsx', ...adminOnly, async (_req, res, next) => {
+  try {
+    const buf = await staffImportTemplateXlsx();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="staff-import-template.xlsx"',
+    );
+    return res.status(200).send(buf);
+  }
+  catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/import-template.csv', ...adminOnly, async (_req, res, next) => {
+  try {
+    const csv
+      = 'name,email,tehsil\n'
+      + 'Example Tehsildar,tehsildar.example@district.gov,Raipur\n';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="staff-import-template.csv"',
+    );
+    return res.status(200).send(csv);
+  }
+  catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * @openapi
+ * /api/v1/admin/staff:
+ *   post:
+ *     tags: [Staff]
+ *     summary: Create a single staff user (tehsildar | ri | patwari)
+ */
+router.post('/', ...adminOnly, async (req, res, next) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const created = await createOneStaff({
+      name: String(body.name ?? ''),
+      email: String(body.email ?? ''),
+      role: String(body.role ?? '') as StaffImportRole,
+      tehsil: String(body.tehsil ?? body.tehsilName ?? ''),
+    });
+    return Respond(res, created, 201);
+  }
+  catch (error) {
+    return next(error);
+  }
+});
+
+/**
+ * @openapi
+ * /api/v1/admin/staff:
+ *   delete:
+ *     tags: [Staff]
+ *     summary: Delete staff users (never admins). Body: { userIds: string[] }
+ */
+router.delete('/', ...adminOnly, async (req, res, next) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const raw = body.userIds;
+    const userIds = Array.isArray(raw)
+      ? raw.map(id => String(id))
+      : typeof raw === 'string'
+        ? [raw]
+        : [];
+    const result = await deleteStaffUsers(userIds);
+    return Respond(res, result);
+  }
+  catch (error) {
+    return next(error);
+  }
+});
 
 /**
  * @openapi

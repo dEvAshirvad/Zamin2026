@@ -46,4 +46,13 @@ export async function apiPost<T>(
   return data;
 }
 
+export async function apiDelete<T>(
+  url: string,
+  body?: unknown,
+  config?: AxiosRequestConfig,
+) {
+  const { data } = await api.delete<T>(url, { ...config, data: body });
+  return data;
+}
+
 export default api;
