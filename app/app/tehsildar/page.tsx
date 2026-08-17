@@ -3,7 +3,7 @@
 import { PlusIcon, XIcon } from '@phosphor-icons/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 
 import { AppShell } from '@/components/app-shell';
 import {
@@ -31,52 +31,17 @@ import type {
 } from '@/lib/cases';
 import { queryKeys } from '@/lib/query-keys';
 
-interface KhasraFormRow {
-  khasraNumber: string;
-  rakba: string;
-}
-
-interface NeighborFormRow {
-  ownerName: string;
-  address: string;
-}
-
 interface CreateCaseInput {
   applicantName: string;
   applicantContact: string | null;
   applicantGuardianType: GuardianType;
   applicantGuardianName: string;
   applicantResidence: string;
-  village: string;
-  khasras: { khasraNumber: string; rakba: number }[];
-  neighbors: NeighborFormRow[];
-  totalRakba: number;
-  demarcationDate: string;
-  demarcationTime: string;
-  patwariHalkaNumber: string;
+  filedAt: string;
   officeName: string | null;
   district: string | null;
   state: string | null;
   tehsildarName: string | null;
-}
-
-const emptyKhasra = (): KhasraFormRow => ({ khasraNumber: '', rakba: '' });
-const emptyNeighbor = (): NeighborFormRow => ({ ownerName: '', address: '' });
-
-function nextUtcDate(date: string): string {
-  const next = new Date(`${date}T00:00:00.000Z`);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next.toISOString().slice(0, 10);
-}
-
-/** Split datetime-local into stored date + HH:mm. */
-function splitDemarcationAt(value: string): {
-  demarcationDate: string;
-  demarcationTime: string;
-} {
-  const [datePart, timePart = '12:00'] = value.split('T');
-  const demarcationTime = timePart.slice(0, 5) || '12:00';
-  return { demarcationDate: datePart!, demarcationTime };
 }
 
 function TehsildarHome() {
@@ -96,18 +61,14 @@ function TehsildarWorkspace({ me }: { me: MeUser }) {
   const [applicantGuardianType, setApplicantGuardianType] =
     useState<GuardianType>('पिता');
   const [applicantGuardianName, setApplicantGuardianName] = useState('');
-  const [applicantResidence, setApplicantResidence] = useState('');
-  const [village, setVillage] = useState('');
-  const [khasras, setKhasras] = useState<KhasraFormRow[]>([emptyKhasra()]);
-  const [neighbors, setNeighbors] = useState<NeighborFormRow[]>([
-    emptyNeighbor(),
-  ]);
-  const [demarcationAt, setDemarcationAt] = useState('');
-  const [patwariHalkaNumber, setPatwariHalkaNumber] = useState('');
-  const [officeName] = useState(me.tehsil?.name ?? '');
-  const [district] = useState('रायपुर');
-  const [state] = useState('छत्तीसगढ़');
-  const [tehsildarName] = useState(me.name);
+  const [address, setAddress] = useState('');
+  const [filedAt, setFiledAt] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  );
+  const officeName = me.tehsil?.name ?? '';
+  const district = 'रायपुर';
+  const state = 'छत्तीसगढ़';
+  const tehsildarName = me.name;
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CaseListFilterValues>({
     stage: '',
@@ -137,38 +98,15 @@ function TehsildarWorkspace({ me }: { me: MeUser }) {
     },
   });
 
-  const totalRakba = useMemo(
-    () =>
-      khasras.reduce((total, row) => {
-        const rakba = Number(row.rakba);
-        return total + (Number.isFinite(rakba) ? rakba : 0);
-      }, 0),
-    [khasras],
-  );
-
   const createMutation = useMutation({
     mutationFn: async () => {
-      const { demarcationDate, demarcationTime }
-        = splitDemarcationAt(demarcationAt);
       const body: CreateCaseInput = {
         applicantName: applicantName.trim(),
         applicantContact: applicantContact.trim() || null,
         applicantGuardianType,
         applicantGuardianName: applicantGuardianName.trim(),
-        applicantResidence: applicantResidence.trim() || village.trim(),
-        village: village.trim(),
-        khasras: khasras.map((row) => ({
-          khasraNumber: row.khasraNumber.trim(),
-          rakba: Number(row.rakba),
-        })),
-        neighbors: neighbors.map((row) => ({
-          ownerName: row.ownerName.trim(),
-          address: row.address.trim(),
-        })),
-        totalRakba,
-        demarcationDate,
-        demarcationTime,
-        patwariHalkaNumber: patwariHalkaNumber.trim(),
+        applicantResidence: address.trim(),
+        filedAt: new Date(`${filedAt}T00:00:00.000Z`).toISOString(),
         officeName: officeName.trim() || null,
         district: district.trim() || null,
         state: state.trim() || null,
@@ -191,40 +129,18 @@ function TehsildarWorkspace({ me }: { me: MeUser }) {
     },
   });
 
-  const earliestDemarcationDay = nextUtcDate(
-    new Date().toISOString().slice(0, 10),
-  );
-  const earliestDemarcationAt = `${earliestDemarcationDay}T12:00`;
-
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!demarcationAt) {
-      setError(t('demarcationAt'));
+    if (!address.trim()) {
+      setError(t('address'));
       return;
     }
-    const { demarcationDate } = splitDemarcationAt(demarcationAt);
-    if (demarcationDate < earliestDemarcationDay) {
-      setError(t('demarcationAt'));
+    if (!filedAt) {
+      setError(t('applicationDate'));
       return;
     }
     setError(null);
     createMutation.mutate();
-  }
-
-  function updateKhasra(index: number, patch: Partial<KhasraFormRow>) {
-    setKhasras((rows) =>
-      rows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, ...patch } : row,
-      ),
-    );
-  }
-
-  function updateNeighbor(index: number, patch: Partial<NeighborFormRow>) {
-    setNeighbors((rows) =>
-      rows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, ...patch } : row,
-      ),
-    );
   }
 
   const cases = casesQuery.data ?? [];
@@ -290,199 +206,28 @@ function TehsildarWorkspace({ me }: { me: MeUser }) {
                   }
                 />
               </Field>
-              <Field label={t('village')}>
+              <Field label={t('address')} className="sm:col-span-2">
+                <Textarea
+                  required
+                  rows={3}
+                  value={address}
+                  onChange={(event) => setAddress(event.target.value)}
+                />
+              </Field>
+              <Field label={t('applicationDate')}>
                 <Input
                   required
-                  value={village}
-                  onChange={(event) => {
-                    const nextVillage = event.target.value;
-                    setApplicantResidence((current) =>
-                      !current || current === village ? nextVillage : current,
-                    );
-                    setVillage(nextVillage);
-                  }}
-                />
-              </Field>
-              <Field label={t('applicantResidence')}>
-                <Input
-                  value={applicantResidence}
-                  onChange={(event) =>
-                    setApplicantResidence(event.target.value)
-                  }
+                  type="date"
+                  value={filedAt}
+                  onChange={(event) => setFiledAt(event.target.value)}
                 />
               </Field>
 
-              <section className="grid gap-3 border border-border p-3 sm:col-span-2">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium">{t('khasras')}</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onPress={() =>
-                      setKhasras((rows) => [...rows, emptyKhasra()])
-                    }
-                  >
-                    <PlusIcon />
-                    {t('addKhasra')}
-                  </Button>
-                </div>
-                {khasras.map((row, index) => (
-                  <div
-                    key={index}
-                    className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
-                  >
-                    <Field label={t('khasras')}>
-                      <Input
-                        required
-                        value={row.khasraNumber}
-                        onChange={(event) =>
-                          updateKhasra(index, {
-                            khasraNumber: event.target.value,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field label={t('rakba')}>
-                      <Input
-                        required
-                        type="number"
-                        min="0.0001"
-                        step="any"
-                        value={row.rakba}
-                        onChange={(event) =>
-                          updateKhasra(index, { rakba: event.target.value })
-                        }
-                      />
-                    </Field>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="self-end"
-                      aria-label={`Remove khasra ${index + 1}`}
-                      isDisabled={khasras.length === 1}
-                      onPress={() =>
-                        setKhasras((rows) =>
-                          rows.filter((_, rowIndex) => rowIndex !== index),
-                        )
-                      }
-                    >
-                      <XIcon />
-                    </Button>
-                  </div>
-                ))}
-                <p className="tnum text-sm text-muted-foreground">
-                  {t('totalRakba')}:{' '}
-                  <strong className="font-semibold text-foreground">
-                    {totalRakba}
-                  </strong>
-                  {' · '}
-                  {t('feeFor', { n: khasras.length })}:{' '}
-                  <strong className="font-semibold text-foreground">
-                    ₹{khasras.length * 50}
-                  </strong>
-                </p>
-              </section>
-
-              <section className="grid gap-3 border border-border p-3 sm:col-span-2">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium">{t('neighbors')}</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onPress={() =>
-                      setNeighbors((rows) => [...rows, emptyNeighbor()])
-                    }
-                  >
-                    <PlusIcon />
-                    {t('addNeighbor')}
-                  </Button>
-                </div>
-                {neighbors.map((row, index) => (
-                  <div
-                    key={index}
-                    className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
-                  >
-                    <Field label={t('neighborName')}>
-                      <Input
-                        required
-                        value={row.ownerName}
-                        onChange={(event) =>
-                          updateNeighbor(index, {
-                            ownerName: event.target.value,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field label={t('neighborAddress')}>
-                      <Textarea
-                        required
-                        rows={1}
-                        value={row.address}
-                        onChange={(event) =>
-                          updateNeighbor(index, { address: event.target.value })
-                        }
-                      />
-                    </Field>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="self-end"
-                      aria-label={`Remove neighbor ${index + 1}`}
-                      isDisabled={neighbors.length === 1}
-                      onPress={() =>
-                        setNeighbors((rows) =>
-                          rows.filter((_, rowIndex) => rowIndex !== index),
-                        )
-                      }
-                    >
-                      <XIcon />
-                    </Button>
-                  </div>
-                ))}
-              </section>
-
-              <Field label={t('demarcationAt')} className="sm:col-span-2 sm:max-w-md">
-                <Input
-                  required
-                  type="datetime-local"
-                  min={earliestDemarcationAt}
-                  value={demarcationAt}
-                  onChange={(event) => setDemarcationAt(event.target.value)}
-                />
-              </Field>
-              <Field label={t('patwariHalka')}>
-                <Input
-                  required
-                  value={patwariHalkaNumber}
-                  onChange={(event) =>
-                    setPatwariHalkaNumber(event.target.value)
-                  }
-                />
-              </Field>
-
-              <details className="border border-border p-3 sm:col-span-2">
-                <summary className="cursor-pointer text-sm font-medium">
-                  {t('officeDefaults')}
-                </summary>
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  <Field label={t('signatoryOffice')}>
-                    <Input value={officeName} disabled readOnly />
-                  </Field>
-                  <Field label={t('district')}>
-                    <Input value={district} disabled readOnly />
-                  </Field>
-                  <Field label={t('state')}>
-                    <Input value={state} disabled readOnly />
-                  </Field>
-                  <Field label={t('tehsildarNameField')}>
-                    <Input value={tehsildarName} disabled readOnly />
-                  </Field>
-                </div>
-              </details>
+              {/* Office defaults kept for PDF later — not shown at intake. */}
+              <input type="hidden" name="officeName" value={officeName} />
+              <input type="hidden" name="district" value={district} />
+              <input type="hidden" name="state" value={state} />
+              <input type="hidden" name="tehsildarName" value={tehsildarName} />
 
               <div className="sm:col-span-2">
                 <ErrorNote>{error}</ErrorNote>

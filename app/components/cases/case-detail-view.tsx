@@ -14,10 +14,19 @@ import { StageStepper } from '@/components/cases/stage-stepper';
 import { StageChip } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLocale } from '@/hooks/use-locale';
-import { apiPost } from '@/lib/api';
-import type { ApiSuccess, CaseDetail } from '@/lib/cases';
+import { api } from '@/lib/api';
+import type { CaseDetail } from '@/lib/cases';
 import { khasraLabel } from '@/lib/cases';
 import { formatDate, formatDateTime, stageLabel } from '@/lib/i18n';
+
+function isEmptyValue(value: ReactNode): boolean {
+  if (value == null || value === false) return true;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed === '' || trimmed === '—';
+  }
+  return false;
+}
 
 function Detail({
   label,
@@ -26,6 +35,7 @@ function Detail({
   label: ReactNode;
   children: ReactNode;
 }) {
+  if (isEmptyValue(children)) return null;
   return (
     <div className="min-w-0">
       <dt className="text-micro text-muted-foreground">{label}</dt>
@@ -37,54 +47,50 @@ function Detail({
 }
 
 function DocLink({
-  href,
   icon,
   label,
-  emptyLabel,
   onClick,
   busy,
 }: {
-  href: string | null | undefined;
   icon: ReactNode;
   label: string;
-  emptyLabel: string;
-  onClick?: () => void;
+  onClick: () => void;
   busy?: boolean;
 }) {
-  if (!href && !onClick) {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-none border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
-        {icon}
-        {emptyLabel}
-      </span>
-    );
-  }
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onClick}
-        className="inline-flex items-center gap-2 rounded-none border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-60"
-      >
-        {icon}
-        {busy ? '…' : label}
-        <DownloadSimpleIcon size={14} className="text-muted-foreground" />
-      </button>
-    );
-  }
   return (
-    <a
-      href={href!}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-2 rounded-none border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-none border border-border bg-card px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-60"
     >
       {icon}
-      {label}
+      {busy ? '…' : label}
       <DownloadSimpleIcon size={14} className="text-muted-foreground" />
-    </a>
+    </button>
   );
+}
+
+function filenameFromDisposition(
+  header: string | undefined,
+  fallback: string,
+): string {
+  const match = /filename\*?=(?:UTF-8''|")?([^\";]+)"?/i.exec(header ?? '');
+  if (!match?.[1]) return fallback;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+async function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function CaseDetailView({
@@ -96,22 +102,69 @@ export function CaseDetailView({
 }) {
   const { locale, t } = useLocale();
   const [noticeBusy, setNoticeBusy] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
 
-  async function downloadFreshNotice() {
+  const addressRaw
+    = detail.applicantResidence?.trim() || detail.village?.trim() || '';
+  const address = addressRaw && addressRaw !== '—' ? addressRaw : null;
+  const guardian = detail.applicantGuardianType
+    ? `${detail.applicantGuardianType} ${detail.applicantGuardianName ?? ''}`.trim()
+    : detail.applicantGuardianName?.trim();
+  const assignee
+    = detail.assignedRiName
+    || detail.assignedPatwariName
+    || detail.assignedRiId
+    || detail.assignedPatwariId
+    || null;
+  const assigneeExtra
+    = detail.assignedRiName && detail.assignedPatwariName
+      ? ` · ${detail.assignedPatwariName}`
+      : '';
+  const demarcation = detail.demarcationDate
+    ? `${formatDate(locale, detail.demarcationDate)}${
+        detail.demarcationTime ? ` · ${detail.demarcationTime}` : ''
+      }`
+    : null;
+  const note = detail.lastTransitionNote || detail.objectionReason || null;
+  const showNotice = Boolean(detail.noticePdfObjectKey);
+  const showReport = Boolean(detail.reportPdfObjectKey);
+  const showDocuments = showNotice || showReport;
+
+  async function downloadNotice() {
     setNoticeBusy(true);
     try {
-      const res = await apiPost<
-        ApiSuccess<{ noticePdfDownloadUrl: string }>
-      >(`/api/v1/cases/${detail.id}/notice-pdf`);
-      const url = res.data.noticePdfDownloadUrl;
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-    catch {
-      if (detail.noticePdfDownloadUrl)
-        window.open(detail.noticePdfDownloadUrl, '_blank', 'noopener,noreferrer');
-    }
-    finally {
+      // Download stored notice (uploaded at memo stage). Do not regenerate —
+      // that would overwrite the uploaded file.
+      const res = await api.get(`/api/v1/cases/${detail.id}/files/notice`, {
+        responseType: 'blob',
+      });
+      saveBlob(
+        res.data,
+        filenameFromDisposition(
+          res.headers['content-disposition'],
+          `notice-${detail.caseNo}`,
+        ),
+      );
+    } finally {
       setNoticeBusy(false);
+    }
+  }
+
+  async function downloadReport() {
+    setReportBusy(true);
+    try {
+      const res = await api.get(`/api/v1/cases/${detail.id}/files/report`, {
+        responseType: 'blob',
+      });
+      saveBlob(
+        res.data,
+        filenameFromDisposition(
+          res.headers['content-disposition'],
+          `report-${detail.caseNo}`,
+        ),
+      );
+    } finally {
+      setReportBusy(false);
     }
   }
 
@@ -134,8 +187,7 @@ export function CaseDetailView({
             {detail.applicantName}
           </h2>
           <p className="text-sm text-muted-foreground">
-            {t('village')} {detail.village} · {t('filedAt')}{' '}
-            {formatDate(locale, detail.filedAt)}
+            {t('filedAt')} {formatDate(locale, detail.filedAt)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -166,85 +218,85 @@ export function CaseDetailView({
       <Card>
         <CardContent>
           <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Detail label={t('khasras')}>
-              <span className="font-mono text-xs">
-                {khasraLabel(detail.khasras)}
-              </span>
+            <Detail label={t('address')}>{address}</Detail>
+            <Detail label={t('guardianName')}>{guardian}</Detail>
+            <Detail label={t('contact')}>{detail.applicantContact}</Detail>
+            {(detail.khasras?.length ?? 0) > 0 ? (
+              <Detail label={t('khasras')}>
+                <span className="font-mono text-xs">
+                  {khasraLabel(detail.khasras)}
+                </span>
+              </Detail>
+            ) : null}
+            {(detail.khasras?.length ?? 0) > 0 && detail.totalRakba != null ? (
+              <Detail label={t('totalRakba')}>
+                <span className="tnum">{detail.totalRakba}</span>
+              </Detail>
+            ) : null}
+            {(detail.khasras?.length ?? 0) > 0 ? (
+              <Detail label={t('fee')}>
+                <span className="tnum">₹{detail.feeAmount}</span>
+              </Detail>
+            ) : null}
+            <Detail label={t('assignStaff')}>
+              {assignee ? `${assignee}${assigneeExtra}` : null}
             </Detail>
-            <Detail label={t('totalRakba')}>
-              <span className="tnum">{detail.totalRakba ?? '—'}</span>
+            <Detail label={t('noticeDate')}>
+              {detail.issueDate
+                ? formatDate(locale, detail.issueDate)
+                : null}
             </Detail>
-            <Detail label={t('fee')}>
-              <span className="tnum">₹{detail.feeAmount}</span>
-            </Detail>
-            <Detail label={t('guardianName')}>
-              {detail.applicantGuardianType
-                ? `${detail.applicantGuardianType} ${detail.applicantGuardianName ?? ''}`
-                : (detail.applicantGuardianName || '—')}
-            </Detail>
-            <Detail label={t('applicantResidence')}>
-              {detail.applicantResidence || '—'}
-            </Detail>
-            <Detail label={t('contact')}>
-              {detail.applicantContact || '—'}
-            </Detail>
-            <Detail label={t('assignedRi')}>
-              {detail.assignedRiName || detail.assignedRiId || '—'}
-            </Detail>
-            <Detail label={t('assignedPatwari')}>
-              {detail.assignedPatwariName || detail.assignedPatwariId || '—'}
-            </Detail>
-            <Detail label={t('demarcationDate')}>
-              {formatDate(locale, detail.demarcationDate)}
-              {detail.demarcationTime ? ` · ${detail.demarcationTime}` : ''}
-            </Detail>
+            <Detail label={t('demarcationDate')}>{demarcation}</Detail>
             <Detail label={t('patwariHalka')}>
-              {detail.patwariHalkaNumber || '—'}
+              {detail.patwariHalkaNumber}
             </Detail>
             <Detail label={t('reportDue')}>
               {detail.reportDueAt
                 ? formatDateTime(locale, detail.reportDueAt)
-                : '—'}
+                : null}
             </Detail>
-            <Detail label={t('neighbors')}>
-              {(detail.neighbors ?? []).length
-                ? detail.neighbors!
-                    .map((n) => `${n.ownerName} (${n.address})`)
-                    .join('; ')
-                : '—'}
-            </Detail>
-            <Detail label={t('lastNote')}>
-              {detail.lastTransitionNote || detail.objectionReason || '—'}
-            </Detail>
+            {(detail.neighbors ?? []).length > 0 ? (
+              <Detail label={t('neighbors')}>
+                {detail.neighbors!
+                  .map((n) => `${n.ownerName} (${n.address})`)
+                  .join('; ')}
+              </Detail>
+            ) : null}
+            <Detail label={t('lastNote')}>{note}</Detail>
+            {detail.superiorAlert ? (
+              <Detail label={t('superiorAlertRaised')}>
+                {t('superiorAlertRaised')}
+              </Detail>
+            ) : null}
           </dl>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('documents')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <DocLink
-            href={detail.noticePdfDownloadUrl}
-            icon={<FileTextIcon size={16} />}
-            label={t('downloadNotice')}
-            emptyLabel={t('noNotice')}
-            onClick={
-              detail.noticePdfObjectKey || detail.noticePdfDownloadUrl
-                ? downloadFreshNotice
-                : undefined
-            }
-            busy={noticeBusy}
-          />
-          <DocLink
-            href={detail.reportPdfDownloadUrl}
-            icon={<FileTextIcon size={16} />}
-            label={t('downloadReport')}
-            emptyLabel={t('noReport')}
-          />
-        </CardContent>
-      </Card>
+      {showDocuments ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('documents')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {showNotice ? (
+              <DocLink
+                icon={<FileTextIcon size={16} />}
+                label={t('downloadNotice')}
+                onClick={() => void downloadNotice()}
+                busy={noticeBusy}
+              />
+            ) : null}
+            {showReport ? (
+              <DocLink
+                icon={<FileTextIcon size={16} />}
+                label={t('downloadReport')}
+                onClick={() => void downloadReport()}
+                busy={reportBusy}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

@@ -45,9 +45,14 @@ describe('case.transitions', () => {
     })).toBe(true);
     expect(canTransition({
       from: 'HEARING_SCHEDULED',
-      to: 'DEMARCATION_WINDOW_OPEN',
+      to: 'REPORT_SUBMITTED',
       role: 'ri',
     })).toBe(true);
+    expect(canTransition({
+      from: 'HEARING_SCHEDULED',
+      to: 'DEMARCATION_WINDOW_OPEN',
+      role: 'ri',
+    })).toBe(false);
     expect(canTransition({
       from: 'HEARING_SCHEDULED',
       to: 'OBJECTION_CLOSED',
@@ -76,7 +81,7 @@ describe('case.transitions', () => {
   it('lists role-filtered targets', () => {
     expect(allowedTargets('HEARING_SCHEDULED', 'ri')).toEqual([
       'OBJECTION_CLOSED',
-      'DEMARCATION_WINDOW_OPEN',
+      'REPORT_SUBMITTED',
     ]);
     expect(allowedTargets('HEARING_SCHEDULED', 'tehsildar')).toEqual([]);
     expect(allowedTargets('ORDER_ISSUED', 'tehsildar')).toEqual([]);

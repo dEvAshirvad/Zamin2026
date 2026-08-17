@@ -159,12 +159,12 @@ export async function presignGetObject(params: PresignGetParams): Promise<{
 }> {
   assertS3Configured();
   const cfg = readStorageConfig();
-  const client = getPublicStorageClient();
-  const command = new HeadObjectCommand({
+  // Existence check on internal endpoint; sign with public so browsers can open the URL.
+  const internal = getStorageClient();
+  await sendWithTimeout(internal.send(new HeadObjectCommand({
     Bucket: cfg.bucket,
     Key: params.key,
-  });
-  await sendWithTimeout(client.send(command));
+  })));
 
   const getCommand = new GetObjectCommand({
     Bucket: cfg.bucket,
@@ -173,7 +173,7 @@ export async function presignGetObject(params: PresignGetParams): Promise<{
       ? `attachment; filename="${params.downloadFileName.replace(/"/g, '')}"`
       : undefined,
   });
-  const downloadUrl = await getSignedUrl(client, getCommand, {
+  const downloadUrl = await getSignedUrl(getPublicStorageClient(), getCommand, {
     expiresIn: cfg.downloadExpiresIn,
   });
   return { downloadUrl, expiresInSeconds: cfg.downloadExpiresIn };

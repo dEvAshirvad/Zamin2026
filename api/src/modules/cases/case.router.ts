@@ -13,8 +13,10 @@ import {
   createCase,
   generateNoticePdf,
   getCaseById,
+  getCasePdfDownload,
   listCases,
   listCaseTransitions,
+  previewNoticePdf,
   rescheduleDemarcation,
   transitionCase,
 } from './case.service';
@@ -74,22 +76,26 @@ router.post('/', ...tehsildarWrite, async (req, res, next) => {
       applicantGuardianName: body.applicantGuardianName
         ? String(body.applicantGuardianName)
         : null,
-      applicantResidence: body.applicantResidence
-        ? String(body.applicantResidence)
-        : null,
-      village: String(body.village ?? ''),
+      applicantResidence: String(
+        body.applicantResidence ?? body.address ?? body.village ?? '',
+      ) || null,
+      village: body.village ? String(body.village) : null,
       khasras: parseJsonField(body.khasras),
       neighbors: parseJsonField(body.neighbors),
       totalRakba: body.totalRakba != null ? Number(body.totalRakba) : null,
       filedAt: body.filedAt ? String(body.filedAt) : null,
-      demarcationDate: String(body.demarcationDate ?? ''),
+      demarcationDate: body.demarcationDate
+        ? String(body.demarcationDate)
+        : null,
       demarcationTime: body.demarcationTime
         ? String(body.demarcationTime)
         : '12:00',
       officeName: body.officeName ? String(body.officeName) : null,
       district: body.district ? String(body.district) : null,
       state: body.state ? String(body.state) : null,
-      patwariHalkaNumber: String(body.patwariHalkaNumber ?? ''),
+      patwariHalkaNumber: body.patwariHalkaNumber
+        ? String(body.patwariHalkaNumber)
+        : null,
       tehsildarName: body.tehsildarName ? String(body.tehsildarName) : null,
       issueDate: body.issueDate ? String(body.issueDate) : null,
     });
@@ -155,13 +161,21 @@ router.get('/:id/transitions', ...staffRead, async (req, res, next) => {
 router.post(
   '/:id/transitions',
   ...transitionActors,
-  upload.middleware.fields([{ name: 'report', maxCount: 1 }]),
+  upload.middleware.fields([
+    { name: 'notice', maxCount: 1 },
+    { name: 'report', maxCount: 1 },
+  ]),
   async (req, res, next) => {
-    const files = req.files as { report?: Express.Multer.File[] } | undefined;
+    const files = req.files as
+      | { notice?: Express.Multer.File[]; report?: Express.Multer.File[] }
+      | undefined;
+    const noticeFile = files?.notice?.[0] ?? null;
     const reportFile = files?.report?.[0] ?? null;
-    const paths = reportFile?.path ? [reportFile.path] : [];
+    const paths = [noticeFile?.path, reportFile?.path].filter(
+      (p): p is string => Boolean(p),
+    );
     try {
-      if (reportFile?.path) {
+      if (paths.length > 0) {
         const invalid = upload.validateSignatures(paths);
         if (invalid.length > 0) {
           throw new APIError({
@@ -175,6 +189,8 @@ router.post(
       const body = req.body as Record<string, unknown>;
       const updated = await transitionCase(req.user!, String(req.params.id), {
         toStage: String(body.toStage ?? ''),
+        assignedStaffId:
+          body.assignedStaffId != null ? String(body.assignedStaffId) : null,
         assignedRiId:
           body.assignedRiId != null ? String(body.assignedRiId) : null,
         assignedPatwariId:
@@ -184,6 +200,13 @@ router.post(
         note: body.note != null ? String(body.note) : null,
         objectionReason:
           body.objectionReason != null ? String(body.objectionReason) : null,
+        neighbors: parseJsonField(body.neighbors),
+        issueDate: body.issueDate != null ? String(body.issueDate) : null,
+        demarcationDate:
+          body.demarcationDate != null ? String(body.demarcationDate) : null,
+        demarcationTime:
+          body.demarcationTime != null ? String(body.demarcationTime) : null,
+        noticeFile,
         reportFile,
       });
       return Respond(res, updated);
@@ -224,12 +247,86 @@ router.post(
 );
 
 router.post(
+  '/:id/notice-preview',
+  ...transitionActors,
+  async (req, res, next) => {
+    try {
+      const { buffer, filename } = await previewNoticePdf(
+        req.user!,
+        String(req.params.id),
+        {
+          neighbors: parseJsonField(req.body?.neighbors) ?? req.body?.neighbors,
+          issueDate: req.body?.issueDate,
+          demarcationDate: req.body?.demarcationDate,
+          demarcationTime: req.body?.demarcationTime,
+        },
+      );
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${filename.replace(/"/g, '')}"`,
+      );
+      return res.status(200).send(buffer);
+    }
+    catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
   '/:id/notice-pdf',
   ...transitionActors,
   async (req, res, next) => {
     try {
       const result = await generateNoticePdf(req.user!, String(req.params.id));
       return Respond(res, result);
+    }
+    catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/:id/files/notice',
+  ...staffRead,
+  async (req, res, next) => {
+    try {
+      const { buffer, filename, contentType } = await getCasePdfDownload(
+        req.user!,
+        String(req.params.id),
+        'notice',
+      );
+      res.setHeader('Content-Type', contentType);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${filename.replace(/"/g, '')}"`,
+      );
+      return res.status(200).send(buffer);
+    }
+    catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/:id/files/report',
+  ...staffRead,
+  async (req, res, next) => {
+    try {
+      const { buffer, filename, contentType } = await getCasePdfDownload(
+        req.user!,
+        String(req.params.id),
+        'report',
+      );
+      res.setHeader('Content-Type', contentType);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${filename.replace(/"/g, '')}"`,
+      );
+      return res.status(200).send(buffer);
     }
     catch (error) {
       return next(error);

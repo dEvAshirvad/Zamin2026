@@ -1,11 +1,7 @@
 'use client';
 
 import { useLocale } from '@/hooks/use-locale';
-import {
-  OBJECTION_STAGE,
-  STAGE_ORDER,
-  stageShortLabel,
-} from '@/lib/i18n';
+import { OBJECTION_STAGE, STAGE_ORDER, stageShortLabel } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -41,7 +37,7 @@ export function StageStepper({
             const active = currentIndex === i;
             const isLast = i === stages.length - 1;
             const overdueHere =
-              alertOverdue && stage === 'DEMARCATION_DONE' && active;
+              alertOverdue && stage === 'HEARING_SCHEDULED' && active;
 
             return (
               <li
@@ -54,16 +50,19 @@ export function StageStepper({
                     className={cn(
                       'flex size-3.5 shrink-0 items-center justify-center rounded-none border-2 transition-colors',
                       done && 'border-primary bg-primary',
-                      active && !overdueHere && 'border-ring bg-card ring-2 ring-ring/30',
-                      overdueHere && 'border-sla-overdue bg-sla-overdue/20 ring-2 ring-sla-overdue/40',
-                      !done && !active && 'border-border bg-card',
+                      active &&
+                        !overdueHere &&
+                        'border-ring bg-card ring-2 ring-ring/30',
+                      overdueHere &&
+                        'border-sla-overdue bg-sla-overdue/20 ring-2 ring-sla-overdue/40',
+                      !done && !active && 'border-border bg-card'
                     )}
                   >
                     {active ? (
                       <span
                         className={cn(
                           'size-1.5 rounded-none',
-                          overdueHere ? 'bg-sla-overdue' : 'bg-ring',
+                          overdueHere ? 'bg-sla-overdue' : 'bg-ring'
                         )}
                       />
                     ) : null}
@@ -73,7 +72,7 @@ export function StageStepper({
                       aria-hidden
                       className={cn(
                         'h-0.5 w-full min-w-6',
-                        done ? 'bg-primary' : 'bg-border',
+                        done ? 'bg-primary' : 'bg-border'
                       )}
                     />
                   ) : null}
@@ -86,7 +85,7 @@ export function StageStepper({
                       : done
                         ? 'text-muted-foreground'
                         : 'text-muted-foreground/60',
-                    overdueHere && 'text-sla-overdue',
+                    overdueHere && 'text-sla-overdue'
                   )}
                 >
                   {stageShortLabel(locale, stage)}
@@ -97,15 +96,6 @@ export function StageStepper({
           })}
         </ol>
       </div>
-      <input
-        type="range"
-        min={0}
-        max={Math.max(stages.length - 1, 0)}
-        value={Math.max(currentIndex, 0)}
-        readOnly
-        aria-label={t('pipeline')}
-        className="w-full accent-[var(--ring)]"
-      />
     </div>
   );
 }

@@ -12,7 +12,6 @@ export interface CaseTransitionLogDoc {
   actorUserId: string;
   actorRole: string;
   note?: string | null;
-  ecourtReference?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,7 +25,6 @@ const caseTransitionLogSchema = new Schema<CaseTransitionLogDoc>(
     actorUserId: { type: String, required: true },
     actorRole: { type: String, required: true },
     note: { type: String, default: null, trim: true },
-    ecourtReference: { type: String, default: null, trim: true },
   },
   { collection: 'case_transition_logs', timestamps: true },
 );

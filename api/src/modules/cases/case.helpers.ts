@@ -95,13 +95,34 @@ export function computeGuaranteeDueAt(filedAt: Date): Date {
   return due;
 }
 
-/** Report due 12 hours after demarcation done. */
+/**
+ * Report due 23:59 Asia/Kolkata (IST) on the demarcation calendar day.
+ * Demarcation YMD is stored as UTC date parts; 23:59 IST = 18:29 UTC that day.
+ */
+export function computeReportDueAtFromDemarcation(demarcationDate: Date): Date {
+  return new Date(Date.UTC(
+    demarcationDate.getUTCFullYear(),
+    demarcationDate.getUTCMonth(),
+    demarcationDate.getUTCDate(),
+    18,
+    29,
+    0,
+    0,
+  ));
+}
+
+/** @deprecated Prefer computeReportDueAtFromDemarcation — kept for legacy DEMARCATION_DONE. */
 export function computeReportDueAt(demarcationDoneAt: Date): Date {
   return new Date(demarcationDoneAt.getTime() + 12 * 60 * 60 * 1000);
 }
 
 export function utcYmd(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/** Calendar YMD in Asia/Kolkata (IST). */
+export function istYmd(d: Date = new Date()): string {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
 export function sameUtcDay(a: Date, b: Date): boolean {
@@ -160,13 +181,20 @@ export function isCaseStage(value: string): value is CaseStage {
   return (CASE_STAGES as readonly string[]).includes(value);
 }
 
+/** Stages waiting on report upload (countdown / overdue). */
+const REPORT_WAIT_STAGES = new Set([
+  'HEARING_SCHEDULED',
+  'DEMARCATION_WINDOW_OPEN',
+  'DEMARCATION_DONE',
+]);
+
 export function computeAlertStatus(opts: {
   stage: string;
   reportDueAt?: Date | null;
   now?: Date;
 }): AlertStatus {
-  if (opts.stage !== 'DEMARCATION_DONE' || !opts.reportDueAt)
+  if (!REPORT_WAIT_STAGES.has(opts.stage) || !opts.reportDueAt)
     return 'none';
   const now = opts.now ?? new Date();
-  return now.getTime() > opts.reportDueAt.getTime() ? 'OVERDUE' : 'none';
+  return now.getTime() >= opts.reportDueAt.getTime() ? 'OVERDUE' : 'none';
 }

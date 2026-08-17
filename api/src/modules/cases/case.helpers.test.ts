@@ -5,6 +5,7 @@ import {
   computeFeeAmount,
   computeGuaranteeDueAt,
   computeReportDueAt,
+  computeReportDueAtFromDemarcation,
   formatCaseNo,
   isCaseVisibleToPatwari,
   isCaseVisibleToRi,
@@ -81,21 +82,30 @@ describe('case.helpers', () => {
     })).toBe(true);
   });
 
-  it('computes OVERDUE alert after reportDueAt on DEMARCATION_DONE', () => {
+  it('computes OVERDUE after 23:59 IST deadline on HEARING_SCHEDULED', () => {
+    // 24 Aug 23:59 IST = 24 Aug 18:29 UTC
     expect(computeAlertStatus({
-      stage: 'DEMARCATION_DONE',
-      reportDueAt: new Date('2026-01-01T12:00:00.000Z'),
-      now: new Date('2026-01-01T13:00:00.000Z'),
+      stage: 'HEARING_SCHEDULED',
+      reportDueAt: new Date('2026-08-24T18:29:00.000Z'),
+      now: new Date('2026-08-24T18:29:00.000Z'),
     })).toBe('OVERDUE');
     expect(computeAlertStatus({
-      stage: 'DEMARCATION_DONE',
-      reportDueAt: new Date('2026-01-01T14:00:00.000Z'),
-      now: new Date('2026-01-01T13:00:00.000Z'),
+      stage: 'HEARING_SCHEDULED',
+      reportDueAt: new Date('2026-08-24T18:29:00.000Z'),
+      now: new Date('2026-08-24T18:28:00.000Z'),
     })).toBe('none');
     expect(computeAlertStatus({
       stage: 'REPORT_SUBMITTED',
       reportDueAt: new Date('2026-01-01T12:00:00.000Z'),
       now: new Date('2026-01-01T13:00:00.000Z'),
     })).toBe('none');
+  });
+
+  it('computes report due at 23:59 IST on the demarcation calendar day', () => {
+    expect(
+      computeReportDueAtFromDemarcation(
+        new Date('2026-08-24T14:47:00.000Z'),
+      ).toISOString(),
+    ).toBe('2026-08-24T18:29:00.000Z');
   });
 });

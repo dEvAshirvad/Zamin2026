@@ -18,7 +18,6 @@ export interface TransitionLogItem {
   actorUserId: string;
   actorRole: string;
   note: string | null;
-  ecourtReference: string | null;
   createdAt: string;
 }
 

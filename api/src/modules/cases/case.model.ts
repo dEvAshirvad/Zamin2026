@@ -44,9 +44,9 @@ export interface CaseDoc {
   reportDueAt?: Date | null;
   lastTransitionNote?: string | null;
   objectionReason?: string | null;
+  /** Set when demarcation is rescheduled after report deadline (admin alert). */
+  superiorAlert?: boolean;
   guaranteeDueAt: Date;
-  ecourtUploaded?: boolean;
-  ecourtReference?: string | null;
   deletedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -116,9 +116,8 @@ const caseSchema = new Schema<CaseDoc>(
     reportDueAt: { type: Date, default: null, index: true },
     lastTransitionNote: { type: String, default: null, trim: true },
     objectionReason: { type: String, default: null, trim: true },
+    superiorAlert: { type: Boolean, default: false, index: true },
     guaranteeDueAt: { type: Date, required: true, index: true },
-    ecourtUploaded: { type: Boolean, default: false },
-    ecourtReference: { type: String, default: null, trim: true },
   },
   { collection: 'cases' },
 );

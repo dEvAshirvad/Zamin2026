@@ -37,8 +37,7 @@ export interface CaseListItem {
   lastTransitionNote?: string | null;
   objectionReason?: string | null;
   guaranteeDueAt: string;
-  ecourtUploaded?: boolean;
-  ecourtReference?: string | null;
+  superiorAlert?: boolean;
   alertStatus?: AlertStatus;
   slaStatus?: SlaStatus;
   daysToGuarantee?: number;

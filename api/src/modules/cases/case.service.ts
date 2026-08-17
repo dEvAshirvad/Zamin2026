@@ -8,6 +8,7 @@ import type { AuthUser } from '@/types/global';
 import { db } from '@/configs/db/mongodb';
 import APIError from '@/configs/errors/APIError';
 import {
+  getObjectBuffer,
   isS3Configured,
   presignGetObject,
   putObject,
@@ -29,13 +30,14 @@ import {
   computeFeeAmount,
   computeGuaranteeDueAt,
   computeReportDueAt,
+  computeReportDueAtFromDemarcation,
   formatCaseNo,
   isCaseStage,
   isCaseVisibleToPatwari,
   isCaseVisibleToRi,
+  istYmd,
   normalizeKhasraRows,
   normalizeNeighbors,
-  OPEN_CASE_STAGES,
   RI_ACTIVE_STAGES,
   sameUtcDay,
   sumRakba,
@@ -51,7 +53,6 @@ import { buildSlaFields, computeStageDueAt, overdueCaseMatch } from './case.sla'
 import {
   allowedTargets,
   canTransition,
-  pickLeastLoadedRi,
 } from './case.transitions';
 
 export interface CreateCaseInput {
@@ -59,29 +60,36 @@ export interface CreateCaseInput {
   applicantContact?: string | null;
   applicantGuardianType?: string | null;
   applicantGuardianName?: string | null;
+  /** Address (replaces separate village / residence at intake). */
   applicantResidence?: string | null;
-  village: string;
-  khasras: unknown;
-  neighbors: unknown;
+  village?: string | null;
+  khasras?: unknown;
+  neighbors?: unknown;
   totalRakba?: number | null;
   filedAt?: string | Date | null;
-  demarcationDate: string | Date;
+  demarcationDate?: string | Date | null;
   demarcationTime?: string | null;
   officeName?: string | null;
   district?: string | null;
   state?: string | null;
-  patwariHalkaNumber: string;
+  patwariHalkaNumber?: string | null;
   tehsildarName?: string | null;
   issueDate?: string | Date | null;
 }
 
 export interface TransitionInput {
   toStage: string;
+  /** Single assignee — RI or Patwari (preferred over dual ids). */
+  assignedStaffId?: string | null;
   assignedRiId?: string | null;
   assignedPatwariId?: string | null;
   note?: string | null;
   objectionReason?: string | null;
+  neighbors?: unknown;
+  issueDate?: string | Date | null;
   demarcationDate?: string | Date | null;
+  demarcationTime?: string | null;
+  noticeFile?: Express.Multer.File | null;
   reportFile?: Express.Multer.File | null;
 }
 
@@ -256,6 +264,16 @@ function serializeCase(doc: CaseDoc & { _id: unknown }) {
     guaranteeDueAt: doc.guaranteeDueAt,
     stageDueAt: doc.stageDueAt,
   });
+  // Derive from demarcation day so older cases keep the 23:59-same-day rule.
+  const reportDueAt
+    = doc.demarcationDate
+    && (
+      doc.stage === 'HEARING_SCHEDULED'
+      || doc.stage === 'DEMARCATION_WINDOW_OPEN'
+      || doc.stage === 'DEMARCATION_DONE'
+    )
+      ? computeReportDueAtFromDemarcation(doc.demarcationDate)
+      : doc.reportDueAt ?? null;
   return {
     id: String(doc._id),
     caseNo: doc.caseNo,
@@ -287,20 +305,15 @@ function serializeCase(doc: CaseDoc & { _id: unknown }) {
     issueDate: doc.issueDate ?? null,
     stageChangedAt: doc.stageChangedAt ?? null,
     stageDueAt: doc.stageDueAt ?? null,
-    reportDueAt: doc.reportDueAt ?? null,
+    reportDueAt,
     lastTransitionNote: doc.lastTransitionNote ?? null,
     objectionReason: doc.objectionReason ?? null,
+    superiorAlert: Boolean(doc.superiorAlert),
     guaranteeDueAt: doc.guaranteeDueAt,
     alertStatus: computeAlertStatus({
       stage: doc.stage,
-      reportDueAt: doc.reportDueAt,
+      reportDueAt,
     }),
-    ...(doc.ecourtUploaded == null
-      ? {}
-      : { ecourtUploaded: doc.ecourtUploaded }),
-    ...(doc.ecourtReference == null
-      ? {}
-      : { ecourtReference: doc.ecourtReference }),
     ...sla,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
@@ -359,26 +372,18 @@ export async function createCase(user: AuthUser, input: CreateCaseInput) {
   }
 
   const applicantName = String(input.applicantName ?? '').trim();
-  const village = String(input.village ?? '').trim();
-  const patwariHalkaNumber = String(input.patwariHalkaNumber ?? '').trim();
-  const khasras = normalizeKhasraRows(input.khasras);
-  const neighbors = normalizeNeighbors(input.neighbors);
-  if (
-    !applicantName
-    || !village
-    || !patwariHalkaNumber
-    || !input.demarcationDate
-  ) {
-    throw validationError(
-      'applicantName, village, patwariHalkaNumber, and demarcationDate are required',
-    );
+  const address = String(
+    input.applicantResidence ?? input.village ?? '',
+  ).trim();
+  if (!applicantName || !address) {
+    throw validationError('applicantName and address are required');
   }
-  if (khasras.length === 0) {
-    throw validationError('At least one khasra with positive rakba is required');
-  }
-  if (neighbors.length === 0) {
-    throw validationError('At least one neighbor is required');
-  }
+
+  const khasras = input.khasras != null ? normalizeKhasraRows(input.khasras) : [];
+  const neighbors
+    = input.neighbors != null ? normalizeNeighbors(input.neighbors) : [];
+  const patwariHalkaNumber
+    = String(input.patwariHalkaNumber ?? '').trim() || null;
 
   const guardianTypeRaw = input.applicantGuardianType?.trim() || null;
   if (
@@ -395,12 +400,15 @@ export async function createCase(user: AuthUser, input: CreateCaseInput) {
     );
   }
 
-  const filedAt = new Date();
-  const demarcationDate = parseDate(
+  const filedAt = optionalDate(input.filedAt, 'filedAt') ?? new Date();
+  const demarcationDate = optionalDate(
     input.demarcationDate,
     'demarcationDate',
   );
-  if (utcYmd(demarcationDate) <= utcYmd(filedAt)) {
+  if (
+    demarcationDate
+    && utcYmd(demarcationDate) <= utcYmd(filedAt)
+  ) {
     throw validationError(
       'demarcationDate must be after the filedAt calendar day',
     );
@@ -408,10 +416,13 @@ export async function createCase(user: AuthUser, input: CreateCaseInput) {
 
   // Issued when memo is posted — not at intake.
   const issueDate = null;
-  const demarcationTime = normalizeTime(input.demarcationTime);
-  const calculatedRakba = sumRakba(khasras);
+  const demarcationTime = demarcationDate
+    ? normalizeTime(input.demarcationTime)
+    : '12:00';
+  const calculatedRakba = khasras.length > 0 ? sumRakba(khasras) : 0;
   if (
-    input.totalRakba != null
+    khasras.length > 0
+    && input.totalRakba != null
     && (
       !Number.isFinite(input.totalRakba)
       || Math.abs(input.totalRakba - calculatedRakba) > 0.0001
@@ -430,6 +441,9 @@ export async function createCase(user: AuthUser, input: CreateCaseInput) {
     );
   }
 
+  // Village kept for schema/PDF until later stages fill land details.
+  const village = String(input.village ?? '').trim() || '—';
+
   const caseNo = await nextCaseNo(user.tehsilId, tehsil.slug, filedAt);
   const stageChangedAt = filedAt;
   const created = await CaseModel.create({
@@ -440,7 +454,7 @@ export async function createCase(user: AuthUser, input: CreateCaseInput) {
     applicantContact: input.applicantContact?.trim() || null,
     applicantGuardianType: guardianTypeRaw as GuardianType | null,
     applicantGuardianName: guardianName,
-    applicantResidence: input.applicantResidence?.trim() || village,
+    applicantResidence: address,
     village,
     khasras,
     totalRakba,
@@ -470,9 +484,24 @@ export async function createCase(user: AuthUser, input: CreateCaseInput) {
     reportDueAt: null,
     lastTransitionNote: null,
     objectionReason: null,
+    superiorAlert: false,
     guaranteeDueAt: computeGuaranteeDueAt(filedAt),
-    ecourtUploaded: false,
-    ecourtReference: null,
+  });
+
+  const filedNote
+    = `Case filed · applicant ${applicantName}`
+    + (guardianName ? ` · ${guardianTypeRaw ?? ''} ${guardianName}`.trim() : '')
+    + ` · filed ${utcYmd(filedAt)}`;
+  created.lastTransitionNote = filedNote;
+  await created.save();
+  await CaseTransitionLogModel.create({
+    caseId: String(created._id),
+    tehsilId: created.tehsilId,
+    fromStage: 'SUBMITTED',
+    toStage: 'SUBMITTED',
+    actorUserId: user.id,
+    actorRole: user.role,
+    note: filedNote,
   });
 
   return serializeCase(created.toObject());
@@ -525,8 +554,18 @@ export async function listCases(
     and.push(overdueCaseMatch(new Date()));
   if (opts.alert === 'OVERDUE') {
     and.push({
-      stage: 'DEMARCATION_DONE',
-      reportDueAt: { $lt: new Date() },
+      stage: {
+        $in: [
+          'HEARING_SCHEDULED',
+          'DEMARCATION_WINDOW_OPEN',
+          'DEMARCATION_DONE',
+        ],
+      },
+      reportDueAt: { $lte: new Date() },
+      $or: [
+        { reportPdfObjectKey: null },
+        { reportPdfObjectKey: { $exists: false } },
+      ],
     });
   }
   if (and.length > 0)
@@ -591,7 +630,7 @@ async function presignCaseObject(key: string | null | undefined) {
 }
 
 export async function getCaseById(user: AuthUser, caseId: string) {
-  const doc = await CaseModel.findById(caseId).lean();
+  const doc = await CaseModel.findById(caseId);
   if (!doc) {
     throw apiError(
       HttpErrorStatusCode.NOT_FOUND,
@@ -600,6 +639,22 @@ export async function getCaseById(user: AuthUser, caseId: string) {
     );
   }
   assertCaseAccess(user, doc);
+
+  // Heal stored due to 23:59 same demarcation day (older cases used next midnight).
+  if (
+    doc.demarcationDate
+    && (
+      doc.stage === 'HEARING_SCHEDULED'
+      || doc.stage === 'DEMARCATION_WINDOW_OPEN'
+      || doc.stage === 'DEMARCATION_DONE'
+    )
+  ) {
+    const due = computeReportDueAtFromDemarcation(doc.demarcationDate);
+    if (!doc.reportDueAt || doc.reportDueAt.getTime() !== due.getTime()) {
+      doc.reportDueAt = due;
+      await doc.save();
+    }
+  }
 
   const base = serializeCase(doc as CaseDoc & { _id: unknown });
   const [
@@ -624,68 +679,61 @@ export async function getCaseById(user: AuthUser, caseId: string) {
   };
 }
 
-async function resolveRiForMemo(
+async function resolveAssignedFieldStaff(
   tehsilId: string,
-  pickedRiId: string | null | undefined,
-): Promise<string> {
-  const riUsers = await db
-    .collection('user')
-    .find({ role: 'ri', tehsilId })
-    .project({ _id: 1, id: 1 })
-    .toArray();
-  const riIds = riUsers.map(user =>
-    typeof user.id === 'string' && user.id
-      ? user.id
-      : String(user._id),
-  );
-  const picked = pickedRiId?.trim() || null;
-  if (picked) {
-    if (!riIds.includes(picked)) {
-      throw validationError('assignedRiId must be an RI in this tehsil');
-    }
-    return picked;
-  }
-  if (riIds.length === 0) {
-    throw apiError(
-      HttpErrorStatusCode.BAD_REQUEST,
-      'NO_RI_IN_TEHSIL',
-      'Add an RI to this tehsil before issuing memo',
+  staffId: string,
+): Promise<{ role: 'ri' | 'patwari'; userId: string; name: string }> {
+  const staff = await findUserById(staffId);
+  if (
+    !staff
+    || staff.tehsilId !== tehsilId
+    || (staff.role !== 'ri' && staff.role !== 'patwari')
+  ) {
+    throw validationError(
+      'assignedStaffId must be an RI or Patwari in this tehsil',
     );
   }
-  const openCounts = await CaseModel.aggregate<{ _id: string; count: number }>([
-    {
-      $match: {
-        tehsilId,
-        assignedRiId: { $in: riIds },
-        stage: { $in: OPEN_CASE_STAGES },
-      },
-    },
-    { $group: { _id: '$assignedRiId', count: { $sum: 1 } } },
-  ]);
-  const countByRi = new Map(openCounts.map(row => [row._id, row.count]));
-  const selected = pickLeastLoadedRi(
-    riIds.map(id => ({ id, openCount: countByRi.get(id) ?? 0 })),
-  );
-  if (!selected) {
-    throw apiError(
-      HttpErrorStatusCode.BAD_REQUEST,
-      'NO_RI_IN_TEHSIL',
-      'Add an RI to this tehsil before issuing memo',
-    );
-  }
-  return selected;
+  return {
+    role: staff.role,
+    userId: staffId,
+    name: staff.name?.trim() || staff.email || staffId,
+  };
 }
 
-async function validateStaffAssignment(
-  userId: string,
-  role: 'ri' | 'patwari',
-  tehsilId: string,
-) {
-  const staff = await findUserById(userId);
-  if (staff?.role !== role || staff.tehsilId !== tehsilId) {
-    throw validationError(
-      `assigned${role === 'ri' ? 'Ri' : 'Patwari'}Id must be a ${role} in this tehsil`,
-    );
+/** Auto history note when the actor does not supply one. */
+function buildAutoTransitionNote(opts: {
+  toStage: CaseStage;
+  doc: CaseDoc;
+  assignedStaffLabel?: string | null;
+}): string {
+  const { toStage, doc } = opts;
+  switch (toStage) {
+    case 'MEMO_ISSUED':
+      return opts.assignedStaffLabel
+        ? `Memo issued · assigned ${opts.assignedStaffLabel}`
+        : 'Memo issued';
+    case 'HEARING_SCHEDULED': {
+      const notice = doc.issueDate ? utcYmd(doc.issueDate) : '—';
+      const dem = doc.demarcationDate
+        ? `${utcYmd(doc.demarcationDate)} ${doc.demarcationTime ?? '12:00'}`
+        : '—';
+      const n = doc.neighbors?.length ?? 0;
+      return `Notice issued · notice ${notice} · demarcation ${dem} · neighbors ${n}`;
+    }
+    case 'OBJECTION_CLOSED':
+      return doc.objectionReason?.trim()
+        ? `Closed with objection: ${doc.objectionReason.trim()}`
+        : 'Closed with objection';
+    case 'DEMARCATION_WINDOW_OPEN':
+      return 'Demarcation window opened';
+    case 'DEMARCATION_DONE':
+      return 'Demarcation marked done';
+    case 'REPORT_SUBMITTED':
+      return 'Demarcation report uploaded';
+    case 'ORDER_ISSUED':
+      return 'Order issued';
+    default:
+      return `Moved to ${toStage}`;
   }
 }
 
@@ -746,37 +794,79 @@ export async function transitionCase(
     );
   }
 
+  let assignedStaffLabel: string | null = null;
   if (toStage === 'MEMO_ISSUED') {
-    const assignedRiId = input.assignedRiId?.trim();
-    const assignedPatwariId = input.assignedPatwariId?.trim();
-    if (!assignedRiId || !assignedPatwariId) {
+    const staffId
+      = input.assignedStaffId?.trim()
+      || input.assignedRiId?.trim()
+      || input.assignedPatwariId?.trim()
+      || '';
+    if (!staffId) {
       throw validationError(
-        'assignedRiId and assignedPatwariId are required when issuing memo',
+        'assignedStaffId is required when issuing memo (RI or Patwari)',
       );
     }
-    await Promise.all([
-      validateStaffAssignment(assignedRiId, 'ri', doc.tehsilId),
-      validateStaffAssignment(assignedPatwariId, 'patwari', doc.tehsilId),
-    ]);
-    doc.assignedRiId = await resolveRiForMemo(doc.tehsilId, assignedRiId);
-    doc.assignedPatwariId = assignedPatwariId;
-    doc.issueDate = new Date();
+    const assigned = await resolveAssignedFieldStaff(doc.tehsilId, staffId);
+    doc.assignedRiId = assigned.role === 'ri' ? assigned.userId : null;
+    doc.assignedPatwariId
+      = assigned.role === 'patwari' ? assigned.userId : null;
+    assignedStaffLabel
+      = `${assigned.name} (${assigned.role === 'ri' ? 'RI' : 'Patwari'})`;
   }
 
-  // Notice PDF is generated on HEARING_SCHEDULED (NOTICE_ISSUED stage skipped).
-
   if (toStage === 'HEARING_SCHEDULED') {
-    if (!doc.demarcationDate)
-      throw validationError('Case has no demarcationDate');
-    doc.issueDate = doc.issueDate ?? new Date();
-    if (isS3Configured()) {
-      doc.noticePdfObjectKey = await uploadGeneratedCasePdf({
-        tehsilId: doc.tehsilId,
-        caseId: String(doc._id),
-        kind: 'notice',
-        doc,
-      });
+    const neighbors = normalizeNeighbors(input.neighbors);
+    if (neighbors.length === 0) {
+      throw validationError('At least one neighbor is required');
     }
+    const issueDate = optionalDate(input.issueDate, 'issueDate');
+    if (!issueDate) {
+      throw validationError('issueDate (notice date) is required');
+    }
+    if (utcYmd(issueDate) < utcYmd(doc.filedAt)) {
+      throw validationError(
+        'notice date (issueDate) must be on or after the application (filedAt) day',
+      );
+    }
+    const demarcationDate = optionalDate(
+      input.demarcationDate,
+      'demarcationDate',
+    );
+    if (!demarcationDate) {
+      throw validationError('demarcationDate is required');
+    }
+    if (utcYmd(demarcationDate) < utcYmd(issueDate)) {
+      throw validationError(
+        'demarcationDate must be on or after the notice (issueDate) day',
+      );
+    }
+    doc.neighbors = neighbors;
+    doc.issueDate = issueDate;
+    doc.demarcationDate = demarcationDate;
+    doc.demarcationTime = normalizeTime(input.demarcationTime);
+
+    if (!input.noticeFile) {
+      throw validationError('notice PDF file is required');
+    }
+    doc.noticePdfObjectKey = await uploadCaseFile({
+      tehsilId: doc.tehsilId,
+      caseId: String(doc._id),
+      kind: 'notice',
+      file: input.noticeFile,
+    });
+
+    // Report due 11:59 PM on the demarcation calendar day.
+    doc.reportDueAt = computeReportDueAtFromDemarcation(demarcationDate);
+
+    // Stashed: auto-generate Suchna Patra PDF (restore later if needed)
+    // if (isS3Configured()) {
+    //   doc.noticePdfObjectKey = await uploadGeneratedCasePdf({
+    //     tehsilId: doc.tehsilId,
+    //     caseId: String(doc._id),
+    //     kind: 'notice',
+    //     doc,
+    //   });
+    // }
   }
 
   if (toStage === 'OBJECTION_CLOSED') {
@@ -805,6 +895,16 @@ export async function transitionCase(
     doc.reportDueAt = computeReportDueAt(stageChangedAt);
 
   if (toStage === 'REPORT_SUBMITTED') {
+    if (
+      doc.demarcationDate
+      && istYmd() < utcYmd(doc.demarcationDate)
+    ) {
+      throw apiError(
+        HttpErrorStatusCode.BAD_REQUEST,
+        'INVALID_TRANSITION',
+        'Report can only be uploaded on or after the demarcation date',
+      );
+    }
     if (!input.reportFile)
       throw validationError('reportFile is required when submitting report');
     doc.reportPdfObjectKey = await uploadCaseFile({
@@ -816,7 +916,13 @@ export async function transitionCase(
   }
 
   const fromStage = doc.stage;
-  const note = input.note?.trim() || null;
+  const userNote = input.note?.trim() || null;
+  const autoNote = buildAutoTransitionNote({
+    toStage,
+    doc,
+    assignedStaffLabel,
+  });
+  const note = userNote ? `${autoNote} · ${userNote}` : autoNote;
   doc.stage = toStage;
   doc.stageChangedAt = stageChangedAt;
   doc.stageDueAt = computeStageDueAt({
@@ -842,7 +948,6 @@ export async function transitionCase(
     actorUserId: user.id,
     actorRole: user.role,
     note,
-    ecourtReference: null,
   });
 
   const serialized = serializeCase(doc.toObject());
@@ -896,25 +1001,51 @@ export async function rescheduleDemarcation(
   }
 
   const nextDate = parseDate(input.demarcationDate, 'demarcationDate');
+  const nextTime = normalizeTime(input.demarcationTime);
   if (utcYmd(nextDate) <= utcYmd(doc.filedAt)) {
     throw validationError('demarcationDate must be after filedAt');
   }
-  const nextTime = normalizeTime(input.demarcationTime);
+  if (doc.demarcationDate) {
+    const previousAt = combineUtcDateAndTime(
+      doc.demarcationDate,
+      doc.demarcationTime ?? '12:00',
+    );
+    const nextAt = combineUtcDateAndTime(nextDate, nextTime);
+    if (nextAt.getTime() <= previousAt.getTime()) {
+      throw validationError(
+        'reschedule demarcation date/time must be after the current demarcation',
+      );
+    }
+  }
 
   const previousDate = doc.demarcationDate;
   const previousTime = doc.demarcationTime ?? '12:00';
   const previousNoticeIssueDate = doc.issueDate;
+  const previousDue
+    = doc.reportDueAt
+    ?? (previousDate
+      ? computeReportDueAtFromDemarcation(previousDate)
+      : null);
+  const rescheduleAfterOverdue = computeAlertStatus({
+    stage: doc.stage,
+    reportDueAt: previousDue,
+  }) === 'OVERDUE';
 
   doc.demarcationDate = nextDate;
   doc.demarcationTime = nextTime;
   doc.issueDate = new Date();
+  doc.reportDueAt = computeReportDueAtFromDemarcation(nextDate);
+  if (rescheduleAfterOverdue)
+    doc.superiorAlert = true;
   doc.stageDueAt = computeStageDueAt({
     stage: doc.stage,
     stageChangedAt: doc.stageChangedAt ?? new Date(),
     demarcationAt: combineUtcDateAndTime(nextDate, nextTime),
     filedAt: doc.filedAt,
+    reportDueAt: doc.reportDueAt,
   });
 
+  // Stashed: auto-regenerate reschedule notice PDF (optional restore)
   if (isS3Configured()) {
     const body = await buildRescheduleSuchnaPdf(doc, {
       previousDemarcationDate: previousDate,
@@ -930,7 +1061,8 @@ export async function rescheduleDemarcation(
   const note = `Reschedule: ${utcYmd(nextDate)} ${nextTime}. Reason: ${reason}`
     + (previousDate
       ? ` (was ${utcYmd(previousDate)} ${previousTime})`
-      : '');
+      : '')
+    + (rescheduleAfterOverdue ? ' [superior alert: after overdue]' : '');
   doc.lastTransitionNote = note;
   await doc.save();
 
@@ -942,7 +1074,6 @@ export async function rescheduleDemarcation(
     actorUserId: user.id,
     actorRole: user.role,
     note,
-    ecourtReference: null,
   });
   return serializeCase(doc.toObject());
 }
@@ -1016,7 +1147,6 @@ function serializeTransitionLog(doc: {
   actorUserId: string;
   actorRole: string;
   note?: string | null;
-  ecourtReference?: string | null;
   createdAt: Date;
 }) {
   return {
@@ -1028,7 +1158,6 @@ function serializeTransitionLog(doc: {
     actorUserId: doc.actorUserId,
     actorRole: doc.actorRole,
     note: doc.note ?? null,
-    ecourtReference: doc.ecourtReference ?? null,
     createdAt: doc.createdAt,
   };
 }
@@ -1127,6 +1256,124 @@ export async function generateNoticePdf(user: AuthUser, caseId: string) {
   };
 }
 
+/**
+ * Draft Suchna Patra from case + form fields. Does not save or advance stage —
+ * RI/Patwari download, fill blanks by hand if needed, then upload final notice.
+ */
+export async function previewNoticePdf(
+  user: AuthUser,
+  caseId: string,
+  input: {
+    neighbors?: unknown;
+    issueDate?: string | Date | null;
+    demarcationDate?: string | Date | null;
+    demarcationTime?: string | null;
+  },
+): Promise<{ buffer: Buffer; filename: string }> {
+  const doc = await CaseModel.findById(caseId);
+  if (!doc) {
+    throw apiError(
+      HttpErrorStatusCode.NOT_FOUND,
+      'CASE_NOT_FOUND',
+      'Case not found',
+    );
+  }
+  assertCaseAccess(user, doc);
+  if (
+    doc.stage !== 'MEMO_ISSUED'
+    && doc.stage !== 'NOTICE_ISSUED'
+    && doc.stage !== 'HEARING_SCHEDULED'
+  ) {
+    throw apiError(
+      HttpErrorStatusCode.BAD_REQUEST,
+      'INVALID_STAGE',
+      'Notice draft can only be generated at memo / notice stage',
+    );
+  }
+
+  const issueDate = optionalDate(input.issueDate, 'issueDate');
+  if (!issueDate)
+    throw validationError('issueDate (notice date) is required');
+  if (utcYmd(issueDate) < utcYmd(doc.filedAt)) {
+    throw validationError(
+      'notice date (issueDate) must be on or after the application (filedAt) day',
+    );
+  }
+  const demarcationDate = optionalDate(
+    input.demarcationDate,
+    'demarcationDate',
+  );
+  if (!demarcationDate)
+    throw validationError('demarcationDate is required');
+  if (utcYmd(demarcationDate) < utcYmd(issueDate)) {
+    throw validationError(
+      'demarcationDate must be on or after the notice (issueDate) day',
+    );
+  }
+
+  const neighbors = normalizeNeighbors(input.neighbors);
+  const draft: CaseDoc = {
+    ...doc.toObject(),
+    neighbors: neighbors.length > 0 ? neighbors : doc.neighbors ?? [],
+    issueDate,
+    demarcationDate,
+    demarcationTime: normalizeTime(input.demarcationTime),
+  };
+
+  const buffer = await buildSuchnaPatraPdf(draft);
+  return {
+    buffer,
+    filename: `suchna-draft-${doc.caseNo}.pdf`,
+  };
+}
+
+function contentTypeForObjectKey(key: string): string {
+  switch (path.extname(key).toLowerCase()) {
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.webp':
+      return 'image/webp';
+    default:
+      return 'application/pdf';
+  }
+}
+
+/** Stream a stored case file through the API (avoids browser hitting internal MinIO). */
+export async function getCasePdfDownload(
+  user: AuthUser,
+  caseId: string,
+  kind: 'notice' | 'report',
+): Promise<{ buffer: Buffer; filename: string; contentType: string }> {
+  const doc = await CaseModel.findById(caseId);
+  if (!doc) {
+    throw apiError(
+      HttpErrorStatusCode.NOT_FOUND,
+      'CASE_NOT_FOUND',
+      'Case not found',
+    );
+  }
+  assertCaseAccess(user, doc);
+  if (!isS3Configured())
+    throw storageNotConfiguredError();
+
+  const key
+    = kind === 'notice' ? doc.noticePdfObjectKey : doc.reportPdfObjectKey;
+  if (!key) {
+    throw apiError(
+      HttpErrorStatusCode.NOT_FOUND,
+      'FILE_NOT_FOUND',
+      kind === 'notice' ? 'Notice file not found' : 'Report file not found',
+    );
+  }
+
+  const buffer = await getObjectBuffer(key);
+  const filename = key.split('/').pop() || `${kind}.pdf`;
+  return { buffer, filename, contentType: contentTypeForObjectKey(key) };
+}
+
 /** Overdue = past guarantee and not in a closed Suchna Patra stage. */
 export { overdueCaseMatch } from './case.sla';
 
@@ -1142,8 +1389,18 @@ export async function getCaseMetrics(user: AuthUser) {
   const now = new Date();
   const closedStages: CaseStage[] = ['ORDER_ISSUED', 'OBJECTION_CLOSED'];
   const reportOverdueMatch = {
-    stage: 'DEMARCATION_DONE',
-    reportDueAt: { $lt: now },
+    stage: {
+      $in: [
+        'HEARING_SCHEDULED',
+        'DEMARCATION_WINDOW_OPEN',
+        'DEMARCATION_DONE',
+      ],
+    },
+    reportDueAt: { $lte: now },
+    $or: [
+      { reportPdfObjectKey: null },
+      { reportPdfObjectKey: { $exists: false } },
+    ],
   };
   const [
     total,
@@ -1190,8 +1447,23 @@ export async function getCaseMetrics(user: AuthUser) {
               $cond: [
                 {
                   $and: [
-                    { $eq: ['$stage', 'DEMARCATION_DONE'] },
-                    { $lt: ['$reportDueAt', now] },
+                    {
+                      $in: [
+                        '$stage',
+                        [
+                          'HEARING_SCHEDULED',
+                          'DEMARCATION_WINDOW_OPEN',
+                          'DEMARCATION_DONE',
+                        ],
+                      ],
+                    },
+                    { $lte: ['$reportDueAt', now] },
+                    {
+                      $or: [
+                        { $eq: ['$reportPdfObjectKey', null] },
+                        { $not: ['$reportPdfObjectKey'] },
+                      ],
+                    },
                   ],
                 },
                 1,

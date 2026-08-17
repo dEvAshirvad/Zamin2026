@@ -7,14 +7,16 @@ Auth: Better Auth session cookie. Tehsil-scoped for tehsildar; admin sees all. R
 ```
 SUBMITTED → MEMO_ISSUED → HEARING_SCHEDULED
   ├─ OBJECTION_CLOSED (terminal; reason required)
-  └─ DEMARCATION_WINDOW_OPEN → DEMARCATION_DONE → REPORT_SUBMITTED → ORDER_ISSUED (terminal)
+  └─ REPORT_SUBMITTED → ORDER_ISSUED (terminal)
+
+Legacy drain only: DEMARCATION_WINDOW_OPEN → DEMARCATION_DONE → REPORT_SUBMITTED
 ```
 
-`NOTICE_ISSUED` is legacy-only (drains → `HEARING_SCHEDULED`). Notice PDF is generated on `HEARING_SCHEDULED`; `hearingAt` is auto-set from intake `demarcationDate` + `demarcationTime`.
+`NOTICE_ISSUED` is legacy-only (drains → `HEARING_SCHEDULED`). Notice PDF is uploaded on `HEARING_SCHEDULED`; report due = **23:59 IST on the demarcation calendar day** (`reportDueAt`).
 
-Reschedule from `HEARING_SCHEDULED` via `POST /:id/reschedule` with `demarcationDate` + `demarcationTime` + `reason`; regenerates a **पुनर्निर्धारण** notice PDF (previous vs new schedule + reason).
+While at `HEARING_SCHEDULED`: upload report (`→ REPORT_SUBMITTED`) **or** reschedule via `POST /:id/reschedule`. Miss `reportDueAt` → `alertStatus: 'OVERDUE'`. Reschedule after overdue sets `superiorAlert` (visible to tehsildar/admin).
 
-**OVERDUE alert:** `stage === DEMARCATION_DONE` and `now > reportDueAt` → `alertStatus: 'OVERDUE'`. Filter: `?alert=OVERDUE`.
+**OVERDUE alert:** stage in `{HEARING_SCHEDULED, DEMARCATION_WINDOW_OPEN, DEMARCATION_DONE}` and `now >= reportDueAt` → `alertStatus: 'OVERDUE'`. Filter: `?alert=OVERDUE`.
 
 ## Create (tehsildar)
 
@@ -30,15 +32,13 @@ Reschedule from `HEARING_SCHEDULED` via `POST /:id/reschedule` with `demarcation
 
 | toStage | Actor | Extra |
 |---------|--------|--------|
-| MEMO_ISSUED | tehsildar | `assignedRiId` + `assignedPatwariId` required |
-| HEARING_SCHEDULED | RI/Patwari | auto hearingAt from demarcation; generates notice PDF |
+| MEMO_ISSUED | tehsildar | `assignedStaffId` — one RI **or** Patwari |
+| HEARING_SCHEDULED | RI/Patwari | neighbors, notice date, demarcation datetime, upload `notice` PDF; sets `reportDueAt` |
 | OBJECTION_CLOSED | RI/Patwari | objectionReason |
-| DEMARCATION_WINDOW_OPEN | RI/Patwari | only on demarcationDate |
-| DEMARCATION_DONE | RI/Patwari | sets reportDueAt = now+12h |
-| REPORT_SUBMITTED | RI/Patwari | report PDF file |
+| REPORT_SUBMITTED | RI/Patwari | report PDF (from `HEARING_SCHEDULED` or legacy DEMARCATION_*); overdue still allowed |
 | ORDER_ISSUED | tehsildar | |
 
-Also: `POST /:id/reschedule`, `POST /:id/notice-pdf`.
+Also at `HEARING_SCHEDULED`: `POST /:id/reschedule` (`demarcationDate` + `demarcationTime` + `reason`) — resets `reportDueAt`; if already overdue, sets `superiorAlert`.
 
 Staff pickers: `GET /api/v1/tehsils/me/ris`, `GET /api/v1/tehsils/me/patwaris`.
 
