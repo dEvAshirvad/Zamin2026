@@ -1377,7 +1377,69 @@ export async function getCasePdfDownload(
 /** Overdue = past guarantee and not in a closed Suchna Patra stage. */
 export { overdueCaseMatch } from './case.sla';
 
-export async function getCaseMetrics(user: AuthUser) {
+export type CaseMetricsFilters = {
+  /** Inclusive filedAt start (UTC day). */
+  from?: string | null;
+  /** Inclusive filedAt end (UTC day). */
+  to?: string | null;
+  /** Convenience: YYYY-MM → whole calendar month (UTC). */
+  month?: string | null;
+  tehsilIds?: string[] | null;
+};
+
+function metricsDateBounds(filters: CaseMetricsFilters): {
+  from: Date | null;
+  to: Date | null;
+} {
+  const month = filters.month?.trim();
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split('-').map(Number);
+    const from = new Date(Date.UTC(y!, m! - 1, 1, 0, 0, 0, 0));
+    const to = new Date(Date.UTC(y!, m!, 0, 23, 59, 59, 999));
+    return { from, to };
+  }
+  const fromRaw = filters.from?.trim();
+  const toRaw = filters.to?.trim();
+  const from = fromRaw
+    ? new Date(`${fromRaw.slice(0, 10)}T00:00:00.000Z`)
+    : null;
+  const to = toRaw
+    ? new Date(`${toRaw.slice(0, 10)}T23:59:59.999Z`)
+    : null;
+  if (from && Number.isNaN(from.getTime()))
+    throw validationError('from date is invalid');
+  if (to && Number.isNaN(to.getTime()))
+    throw validationError('to date is invalid');
+  if (from && to && from.getTime() > to.getTime())
+    throw validationError('from must be on or before to');
+  return { from, to };
+}
+
+function buildMetricsMatch(
+  filters: CaseMetricsFilters,
+): Record<string, unknown> {
+  const match: Record<string, unknown> = {};
+  const { from, to } = metricsDateBounds(filters);
+  if (from || to) {
+    const filedAt: Record<string, Date> = {};
+    if (from)
+      filedAt.$gte = from;
+    if (to)
+      filedAt.$lte = to;
+    match.filedAt = filedAt;
+  }
+  const tehsilIds = (filters.tehsilIds ?? [])
+    .map(id => id.trim())
+    .filter(Boolean);
+  if (tehsilIds.length > 0)
+    match.tehsilId = { $in: tehsilIds };
+  return match;
+}
+
+export async function getCaseMetrics(
+  user: AuthUser,
+  filters: CaseMetricsFilters = {},
+) {
   if (user.role !== 'admin') {
     throw apiError(
       HttpErrorStatusCode.FORBIDDEN,
@@ -1388,33 +1450,107 @@ export async function getCaseMetrics(user: AuthUser) {
 
   const now = new Date();
   const closedStages: CaseStage[] = ['ORDER_ISSUED', 'OBJECTION_CLOSED'];
-  const reportOverdueMatch = {
-    stage: {
-      $in: [
-        'HEARING_SCHEDULED',
-        'DEMARCATION_WINDOW_OPEN',
-        'DEMARCATION_DONE',
-      ],
-    },
-    reportDueAt: { $lte: now },
-    $or: [
-      { reportPdfObjectKey: null },
-      { reportPdfObjectKey: { $exists: false } },
+  const reportWaitStages = [
+    'HEARING_SCHEDULED',
+    'DEMARCATION_WINDOW_OPEN',
+    'DEMARCATION_DONE',
+  ];
+  const baseMatch = buildMetricsMatch(filters);
+  const { from: rangeFrom, to: rangeTo } = metricsDateBounds(filters);
+
+  const reportOverdueExpr = {
+    $and: [
+      { $in: ['$stage', reportWaitStages] },
+      { $lte: ['$reportDueAt', now] },
+      {
+        $or: [
+          { $eq: ['$reportPdfObjectKey', null] },
+          { $not: ['$reportPdfObjectKey'] },
+        ],
+      },
     ],
   };
+  const overdueExpr = {
+    $and: [
+      { $lt: ['$guaranteeDueAt', now] },
+      { $not: [{ $in: ['$stage', closedStages] }] },
+    ],
+  };
+
   const [
-    total,
-    closed,
-    overdue,
-    reportOverdue,
+    totalsRow,
     byStageRows,
     byTehsilRows,
+    byStaffRows,
   ] = await Promise.all([
-    CaseModel.countDocuments({}),
-    CaseModel.countDocuments({ stage: { $in: closedStages } }),
-    CaseModel.countDocuments(overdueCaseMatch(now)),
-    CaseModel.countDocuments(reportOverdueMatch),
+    CaseModel.aggregate<{
+      total: number;
+      closed: number;
+      overdue: number;
+      reportOverdue: number;
+      superiorAlert: number;
+      openAgeSumMs: number;
+      openCount: number;
+      closedAgeSumMs: number;
+      closedAgeCount: number;
+    }>([
+      { $match: baseMatch },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          closed: {
+            $sum: { $cond: [{ $in: ['$stage', closedStages] }, 1, 0] },
+          },
+          overdue: {
+            $sum: { $cond: [overdueExpr, 1, 0] },
+          },
+          reportOverdue: {
+            $sum: { $cond: [reportOverdueExpr, 1, 0] },
+          },
+          superiorAlert: {
+            $sum: { $cond: [{ $eq: ['$superiorAlert', true] }, 1, 0] },
+          },
+          openAgeSumMs: {
+            $sum: {
+              $cond: [
+                { $not: [{ $in: ['$stage', closedStages] }] },
+                { $subtract: [now, '$filedAt'] },
+                0,
+              ],
+            },
+          },
+          openCount: {
+            $sum: {
+              $cond: [
+                { $not: [{ $in: ['$stage', closedStages] }] },
+                1,
+                0,
+              ],
+            },
+          },
+          closedAgeSumMs: {
+            $sum: {
+              $cond: [
+                { $in: ['$stage', closedStages] },
+                {
+                  $subtract: [
+                    { $ifNull: ['$stageChangedAt', '$updatedAt'] },
+                    '$filedAt',
+                  ],
+                },
+                0,
+              ],
+            },
+          },
+          closedAgeCount: {
+            $sum: { $cond: [{ $in: ['$stage', closedStages] }, 1, 0] },
+          },
+        },
+      },
+    ]),
     CaseModel.aggregate<{ _id: CaseStage; count: number }>([
+      { $match: baseMatch },
       { $group: { _id: '$stage', count: { $sum: 1 } } },
     ]),
     CaseModel.aggregate<{
@@ -1423,57 +1559,112 @@ export async function getCaseMetrics(user: AuthUser) {
       overdue: number;
       reportOverdue: number;
       closed: number;
+      superiorAlert: number;
     }>([
+      { $match: baseMatch },
       {
         $group: {
           _id: '$tehsilId',
           total: { $sum: 1 },
-          overdue: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $lt: ['$guaranteeDueAt', now] },
-                    { $not: [{ $in: ['$stage', closedStages] }] },
-                  ],
-                },
-                1,
-                0,
-              ],
-            },
+          overdue: { $sum: { $cond: [overdueExpr, 1, 0] } },
+          reportOverdue: { $sum: { $cond: [reportOverdueExpr, 1, 0] } },
+          closed: {
+            $sum: { $cond: [{ $in: ['$stage', closedStages] }, 1, 0] },
           },
-          reportOverdue: {
+          superiorAlert: {
+            $sum: { $cond: [{ $eq: ['$superiorAlert', true] }, 1, 0] },
+          },
+        },
+      },
+    ]),
+    CaseModel.aggregate<{
+      _id: { staffId: string; role: string };
+      allotted: number;
+      open: number;
+      closed: number;
+      overdue: number;
+      reportOverdue: number;
+      superiorAlert: number;
+      openAgeSumMs: number;
+      submitted: number;
+      memo: number;
+      notice: number;
+      report: number;
+      order: number;
+      objection: number;
+    }>([
+      { $match: baseMatch },
+      {
+        $addFields: {
+          staffId: { $ifNull: ['$assignedRiId', '$assignedPatwariId'] },
+          staffRole: {
+            $cond: [
+              { $ifNull: ['$assignedRiId', false] },
+              'ri',
+              {
+                $cond: [
+                  { $ifNull: ['$assignedPatwariId', false] },
+                  'patwari',
+                  null,
+                ],
+              },
+            ],
+          },
+        },
+      },
+      { $match: { staffId: { $ne: null }, staffRole: { $ne: null } } },
+      {
+        $group: {
+          _id: { staffId: '$staffId', role: '$staffRole' },
+          allotted: { $sum: 1 },
+          open: {
             $sum: {
               $cond: [
-                {
-                  $and: [
-                    {
-                      $in: [
-                        '$stage',
-                        [
-                          'HEARING_SCHEDULED',
-                          'DEMARCATION_WINDOW_OPEN',
-                          'DEMARCATION_DONE',
-                        ],
-                      ],
-                    },
-                    { $lte: ['$reportDueAt', now] },
-                    {
-                      $or: [
-                        { $eq: ['$reportPdfObjectKey', null] },
-                        { $not: ['$reportPdfObjectKey'] },
-                      ],
-                    },
-                  ],
-                },
+                { $not: [{ $in: ['$stage', closedStages] }] },
                 1,
                 0,
               ],
             },
           },
           closed: {
+            $sum: { $cond: [{ $in: ['$stage', closedStages] }, 1, 0] },
+          },
+          overdue: { $sum: { $cond: [overdueExpr, 1, 0] } },
+          reportOverdue: { $sum: { $cond: [reportOverdueExpr, 1, 0] } },
+          superiorAlert: {
+            $sum: { $cond: [{ $eq: ['$superiorAlert', true] }, 1, 0] },
+          },
+          openAgeSumMs: {
             $sum: {
-              $cond: [{ $in: ['$stage', closedStages] }, 1, 0],
+              $cond: [
+                { $not: [{ $in: ['$stage', closedStages] }] },
+                { $subtract: [now, '$filedAt'] },
+                0,
+              ],
+            },
+          },
+          submitted: {
+            $sum: { $cond: [{ $eq: ['$stage', 'SUBMITTED'] }, 1, 0] },
+          },
+          memo: {
+            $sum: { $cond: [{ $eq: ['$stage', 'MEMO_ISSUED'] }, 1, 0] },
+          },
+          notice: {
+            $sum: {
+              $cond: [{ $eq: ['$stage', 'HEARING_SCHEDULED'] }, 1, 0],
+            },
+          },
+          report: {
+            $sum: {
+              $cond: [{ $eq: ['$stage', 'REPORT_SUBMITTED'] }, 1, 0],
+            },
+          },
+          order: {
+            $sum: { $cond: [{ $eq: ['$stage', 'ORDER_ISSUED'] }, 1, 0] },
+          },
+          objection: {
+            $sum: {
+              $cond: [{ $eq: ['$stage', 'OBJECTION_CLOSED'] }, 1, 0],
             },
           },
         },
@@ -1481,11 +1672,24 @@ export async function getCaseMetrics(user: AuthUser) {
     ]),
   ]);
 
+  const totals = totalsRow[0] ?? {
+    total: 0,
+    closed: 0,
+    overdue: 0,
+    reportOverdue: 0,
+    superiorAlert: 0,
+    openAgeSumMs: 0,
+    openCount: 0,
+    closedAgeSumMs: 0,
+    closedAgeCount: 0,
+  };
+
   const stageCount = new Map(byStageRows.map(row => [row._id, row.count]));
   const byStage = CASE_STAGES.map(stage => ({
     stage,
     count: stageCount.get(stage) ?? 0,
   }));
+
   const tehsilIds = byTehsilRows.map(row => row._id);
   const tehsils = await TehsilModel.find({ _id: { $in: tehsilIds } })
     .select({ name: 1 })
@@ -1502,16 +1706,123 @@ export async function getCaseMetrics(user: AuthUser) {
       overdue: row.overdue,
       reportOverdue: row.reportOverdue,
       closed: row.closed,
+      superiorAlert: row.superiorAlert,
     }))
     .sort((a, b) => a.tehsilName.localeCompare(b.tehsilName));
 
+  const staffIds = byStaffRows.map(row => String(row._id.staffId));
+  const staffDocs = staffIds.length > 0
+    ? await Promise.all(staffIds.map(id => findUserById(id)))
+    : [];
+  const staffNameById = new Map<string, string>();
+  for (let i = 0; i < staffIds.length; i++) {
+    const doc = staffDocs[i] as { name?: string; email?: string } | null;
+    staffNameById.set(
+      staffIds[i]!,
+      doc?.name?.trim() || doc?.email || staffIds[i]!,
+    );
+  }
+
+  const msPerDay = 86_400_000;
+  const byStaff = byStaffRows
+    .map((row) => {
+      const allotted = row.allotted;
+      const closed = row.closed;
+      const open = row.open;
+      return {
+        staffId: String(row._id.staffId),
+        name: staffNameById.get(String(row._id.staffId)) ?? String(row._id.staffId),
+        role: row._id.role as 'ri' | 'patwari',
+        allotted,
+        open,
+        closed,
+        overdue: row.overdue,
+        reportOverdue: row.reportOverdue,
+        superiorAlert: row.superiorAlert,
+        closureRate: allotted > 0 ? Math.round((closed / allotted) * 100) : 0,
+        avgOpenAgeDays: open > 0
+          ? Math.round((row.openAgeSumMs / open) / msPerDay)
+          : null,
+        byStage: [
+          { stage: 'SUBMITTED', count: row.submitted },
+          { stage: 'MEMO_ISSUED', count: row.memo },
+          { stage: 'HEARING_SCHEDULED', count: row.notice },
+          { stage: 'REPORT_SUBMITTED', count: row.report },
+          { stage: 'ORDER_ISSUED', count: row.order },
+          { stage: 'OBJECTION_CLOSED', count: row.objection },
+        ],
+      };
+    })
+    .sort((a, b) => b.allotted - a.allotted || a.name.localeCompare(b.name));
+
+  const open = Math.max(0, totals.total - totals.closed);
+  const avgOpenAgeDays = totals.openCount > 0
+    ? Math.round((totals.openAgeSumMs / totals.openCount) / msPerDay)
+    : null;
+  const avgCloseDays = totals.closedAgeCount > 0
+    ? Math.round((totals.closedAgeSumMs / totals.closedAgeCount) / msPerDay)
+    : null;
+
+  const eligibleStaff = byStaff.filter(s => s.allotted >= 3);
+  const topCloser = eligibleStaff.length > 0
+    ? eligibleStaff.reduce((a, b) => (b.closureRate > a.closureRate ? b : a))
+    : byStaff[0] ?? null;
+  const heaviestLoad = byStaff[0] ?? null;
+  const allotments = byStaff.map(s => s.allotted);
+  const loadImbalance = allotments.length >= 2
+    ? Math.round(
+      (Math.max(...allotments) / Math.max(1, Math.min(...allotments))) * 10,
+    ) / 10
+    : 1;
+
   return {
-    total,
-    closed,
-    overdue,
-    reportOverdue,
+    total: totals.total,
+    closed: totals.closed,
+    overdue: totals.overdue,
+    reportOverdue: totals.reportOverdue,
+    superiorAlert: totals.superiorAlert,
     byStage,
     byTehsil,
+    byStaff,
+    analysis: {
+      open,
+      closureRate: totals.total > 0
+        ? Math.round((totals.closed / totals.total) * 100)
+        : 0,
+      overdueRate: totals.total > 0
+        ? Math.round((totals.overdue / totals.total) * 100)
+        : 0,
+      reportOverdueRate: totals.total > 0
+        ? Math.round((totals.reportOverdue / totals.total) * 100)
+        : 0,
+      avgOpenAgeDays,
+      avgCloseDays,
+      topCloser: topCloser
+        ? {
+            staffId: topCloser.staffId,
+            name: topCloser.name,
+            role: topCloser.role,
+            closureRate: topCloser.closureRate,
+            allotted: topCloser.allotted,
+          }
+        : null,
+      heaviestLoad: heaviestLoad
+        ? {
+            staffId: heaviestLoad.staffId,
+            name: heaviestLoad.name,
+            role: heaviestLoad.role,
+            allotted: heaviestLoad.allotted,
+            open: heaviestLoad.open,
+          }
+        : null,
+      loadImbalance,
+    },
+    filters: {
+      from: rangeFrom?.toISOString().slice(0, 10) ?? null,
+      to: rangeTo?.toISOString().slice(0, 10) ?? null,
+      month: filters.month?.trim() || null,
+      tehsilIds: (filters.tehsilIds ?? []).filter(Boolean),
+    },
     generatedAt: now.toISOString(),
   };
 }

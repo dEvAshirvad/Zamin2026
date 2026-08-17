@@ -23,7 +23,19 @@ const adminOnly = [requireAuth, requireRole('admin')] as RequestHandler[];
  */
 router.get('/cases', ...adminOnly, async (req, res, next) => {
   try {
-    const metrics = await getCaseMetrics(req.user!);
+    const q = req.query as Record<string, unknown>;
+    const tehsilRaw = q.tehsilIds ?? q.tehsilId;
+    const tehsilIds = Array.isArray(tehsilRaw)
+      ? tehsilRaw.map(String)
+      : typeof tehsilRaw === 'string'
+        ? tehsilRaw.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+    const metrics = await getCaseMetrics(req.user!, {
+      from: q.from != null ? String(q.from) : null,
+      to: q.to != null ? String(q.to) : null,
+      month: q.month != null ? String(q.month) : null,
+      tehsilIds,
+    });
     return Respond(res, metrics);
   }
   catch (error) {
