@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import PDFDocument from 'pdfkit';
 
@@ -11,11 +10,11 @@ const FONT_FILE = 'Hind-Regular.ttf';
 const EMBLEM_FILE = 'cg-emblem.png';
 
 function resolveAsset(...parts: string[]): string | null {
-  const here = path.dirname(fileURLToPath(import.meta.url));
+  // CJS build (no package "type":"module") — __dirname works; import.meta does not.
   const candidates = [
     path.join(process.cwd(), 'assets', ...parts),
-    path.join(here, '../../../assets', ...parts),
-    path.join(here, '../../../../assets', ...parts),
+    path.join(__dirname, '../../../assets', ...parts),
+    path.join(__dirname, '../../../../assets', ...parts),
   ];
   for (const candidate of candidates) {
     if (existsSync(candidate))
