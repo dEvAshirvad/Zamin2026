@@ -450,19 +450,83 @@ export async function deleteStaffUsers(userIds: string[]) {
   };
 }
 
-/** XLSX import template (name, email, tehsil + example row). */
-export async function staffImportTemplateXlsx(): Promise<Buffer> {
+/** Role-specific import template examples (one file per upload button). */
+const STAFF_TEMPLATE_EXAMPLES: Array<{
+  role: StaffImportRole;
+  name: string;
+  email: string;
+  tehsil: string;
+}> = [
+  {
+    role: 'tehsildar',
+    name: 'Example Tehsildar',
+    email: 'tehsildar.example@district.gov',
+    tehsil: 'Raipur',
+  },
+  {
+    role: 'ri',
+    name: 'Example RI',
+    email: 'ri.example@district.gov',
+    tehsil: 'Raipur',
+  },
+  {
+    role: 'patwari',
+    name: 'Example Patwari',
+    email: 'patwari.example@district.gov',
+    tehsil: 'Raipur',
+  },
+];
+
+function staffImportTemplateCsv(example: (typeof STAFF_TEMPLATE_EXAMPLES)[number]): string {
+  return (
+    'name,email,tehsil\n'
+    + `${example.name},${example.email},${example.tehsil}\n`
+  );
+}
+
+async function staffImportTemplateXlsxFor(
+  example: (typeof STAFF_TEMPLATE_EXAMPLES)[number],
+): Promise<Buffer> {
   const ExcelJS = (await import('exceljs')).default;
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Staff');
   sheet.addRow(['name', 'email', 'tehsil']);
-  sheet.addRow([
-    'Example Tehsildar',
-    'tehsildar.example@district.gov',
-    'Raipur',
-  ]);
+  sheet.addRow([example.name, example.email, example.tehsil]);
   sheet.getRow(1).font = { bold: true };
   sheet.columns = [{ width: 24 }, { width: 36 }, { width: 18 }];
   const buf = await workbook.xlsx.writeBuffer();
   return Buffer.from(buf);
 }
+
+export type StaffImportTemplateFile = {
+  filename: string;
+  /** UTF-8 text for csv; base64 for xlsx */
+  content: string;
+  encoding: 'utf8' | 'base64';
+};
+
+/** Three role templates in one response (tehsildar / ri / patwari). */
+export async function staffImportTemplates(
+  format: 'csv' | 'xlsx',
+): Promise<{ format: 'csv' | 'xlsx'; files: StaffImportTemplateFile[] }> {
+  const files: StaffImportTemplateFile[] = [];
+  for (const example of STAFF_TEMPLATE_EXAMPLES) {
+    if (format === 'csv') {
+      files.push({
+        filename: `${example.role}-import-template.csv`,
+        content: staffImportTemplateCsv(example),
+        encoding: 'utf8',
+      });
+    }
+    else {
+      const buf = await staffImportTemplateXlsxFor(example);
+      files.push({
+        filename: `${example.role}-import-template.xlsx`,
+        content: buf.toString('base64'),
+        encoding: 'base64',
+      });
+    }
+  }
+  return { format, files };
+}
+

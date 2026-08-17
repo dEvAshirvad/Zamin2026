@@ -405,6 +405,54 @@ function AdminPanel() {
     }
   }
 
+  function saveDownload(filename: string, blob: Blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /** One API → three role template files (tehsildar, ri, patwari). */
+  async function downloadImportTemplates(format: 'csv' | 'xlsx') {
+    setError(null);
+    try {
+      const res = await apiGet<
+        ApiSuccess<{
+          format: string;
+          files: Array<{
+            filename: string;
+            content: string;
+            encoding: 'utf8' | 'base64';
+          }>;
+        }>
+      >(`/api/v1/admin/staff/import-templates?format=${format}`);
+      const files = res.data?.files ?? [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]!;
+        const blob =
+          file.encoding === 'base64'
+            ? new Blob(
+                [Uint8Array.from(atob(file.content), (c) => c.charCodeAt(0))],
+                {
+                  type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                }
+              )
+            : new Blob([file.content], {
+                type: 'text/csv;charset=utf-8',
+              });
+        saveDownload(file.filename, blob);
+        // brief gap so the browser doesn't coalesce / block multi-download
+        if (i < files.length - 1) {
+          await new Promise((r) => setTimeout(r, 250));
+        }
+      }
+    } catch (err) {
+      setError(failMessage(err, 'downloadFailed'));
+    }
+  }
+
   function onDeleteSelected() {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
@@ -450,12 +498,7 @@ function AdminPanel() {
             <Button
               type="button"
               variant="outline"
-              onPress={() =>
-                downloadBlob(
-                  '/api/v1/admin/staff/import-template.csv',
-                  'staff-import-template.csv'
-                )
-              }
+              onPress={() => void downloadImportTemplates('csv')}
             >
               <DownloadSimpleIcon size={14} />
               {t('downloadTemplate')}
@@ -463,12 +506,7 @@ function AdminPanel() {
             <Button
               type="button"
               variant="outline"
-              onPress={() =>
-                downloadBlob(
-                  '/api/v1/admin/staff/import-template.xlsx',
-                  'staff-import-template.xlsx'
-                )
-              }
+              onPress={() => void downloadImportTemplates('xlsx')}
             >
               <DownloadSimpleIcon size={14} />
               {t('downloadTemplateXlsx')}

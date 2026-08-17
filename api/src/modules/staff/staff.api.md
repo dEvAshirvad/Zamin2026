@@ -13,8 +13,7 @@ Auth: Better Auth session cookie (`zamin.session_token`). Role must be `admin`.
 | POST | `/api/v1/admin/staff/import/tehsildars` | admin | Import tehsildars (`name,email,tehsil`) |
 | POST | `/api/v1/admin/staff/import/ris` | admin | Import RIs (`name,email,tehsil`) |
 | POST | `/api/v1/admin/staff/import/patwaris` | admin | Import patwaris (`name,email,tehsil`) |
-| GET | `/api/v1/admin/staff/import-template.csv` | admin | CSV import template |
-| GET | `/api/v1/admin/staff/import-template.xlsx` | admin | Excel import template |
+| GET | `/api/v1/admin/staff/import-templates?format=csv\|xlsx` | admin | Three role templates (tehsildar, ri, patwari) |
 | GET | `/api/v1/admin/staff` | admin | List staff (`role`, `tehsilId`, `q`, `page`, `limit`) |
 | GET | `/api/v1/admin/staff/credentials.csv` | admin | Download all temp passwords |
 | GET | `/api/v1/admin/staff/:userId/password` | admin | Reveal one temp password |
@@ -51,9 +50,25 @@ Multipart field `file` (`.csv` or `.xlsx`). Columns: `name`, `email`, `tehsil`.
 
 Duplicate emails are skipped. Tehsil is resolved or created. Multi-tehsildar tehsils emit warnings when `WARN_MULTIPLE_TEHSILDAR=true`.
 
-## GET `/api/v1/admin/staff/import-template.csv` / `.xlsx`
+## GET `/api/v1/admin/staff/import-templates?format=csv|xlsx`
 
-Downloadable blank template with header + example row (`name`, `email`, `tehsil`).
+One call returns three files (JSON) for the three upload buttons:
+
+```json
+{
+  "success": true,
+  "data": {
+    "format": "csv",
+    "files": [
+      { "filename": "tehsildar-import-template.csv", "content": "name,email,tehsil\\n...", "encoding": "utf8" },
+      { "filename": "ri-import-template.csv", "content": "...", "encoding": "utf8" },
+      { "filename": "patwari-import-template.csv", "content": "...", "encoding": "utf8" }
+    ]
+  }
+}
+```
+
+For `format=xlsx`, each `content` is base64 and `encoding` is `"base64"`.
 
 ## Invite email
 

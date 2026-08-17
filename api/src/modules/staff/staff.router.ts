@@ -19,7 +19,7 @@ import {
   listStaff,
   resetStaffPassword,
   revealPassword,
-  staffImportTemplateXlsx,
+  staffImportTemplates,
 } from './staff.service';
 
 const router = createRouter();
@@ -160,35 +160,32 @@ router.post(
   importHandler('patwari'),
 );
 
-router.get('/import-template.xlsx', ...adminOnly, async (_req, res, next) => {
+/**
+ * @openapi
+ * /api/v1/admin/staff/import-templates:
+ *   get:
+ *     tags: [Staff]
+ *     summary: Three import templates (tehsildar, RI, patwari) in one response
+ *     parameters:
+ *       - in: query
+ *         name: format
+ *         schema: { type: string, enum: [csv, xlsx] }
+ *         required: true
+ */
+router.get('/import-templates', ...adminOnly, async (req, res, next) => {
   try {
-    const buf = await staffImportTemplateXlsx();
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="staff-import-template.xlsx"',
-    );
-    return res.status(200).send(buf);
-  }
-  catch (error) {
-    return next(error);
-  }
-});
-
-router.get('/import-template.csv', ...adminOnly, async (_req, res, next) => {
-  try {
-    const csv
-      = 'name,email,tehsil\n'
-      + 'Example Tehsildar,tehsildar.example@district.gov,Raipur\n';
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="staff-import-template.csv"',
-    );
-    return res.status(200).send(csv);
+    const formatRaw
+      = typeof req.query.format === 'string' ? req.query.format.toLowerCase() : '';
+    if (formatRaw !== 'csv' && formatRaw !== 'xlsx') {
+      throw new APIError({
+        STATUS: HttpErrorStatusCode.BAD_REQUEST,
+        CODE: 'VALIDATION_FAILED',
+        TITLE: 'VALIDATION_FAILED',
+        MESSAGE: 'format must be csv or xlsx',
+      });
+    }
+    const pack = await staffImportTemplates(formatRaw);
+    return Respond(res, pack);
   }
   catch (error) {
     return next(error);
